@@ -1,0 +1,272 @@
+# SPDX-License-Identifier: MIT
+# See LICENSE.md. Part of doas-utils/doas-sudo-shim.
+#
+# Shared helpers and baked PATH resolution. The broker reuses this file so
+# checksum tools and core utilities match the shim's.
+#
+# Installed as $(PREFIX)/libexec/doas-sudo-shim/shim-utils.sh
+# Sourced by doas-sudo-shim and the edit-broker.
+
+# shellcheck shell=sh
+
+# Baked colon-separated dirs (Makefile SHIM_PATH); same token as @BINDIR@ in .in sources.
+_SUDO_SHIM_PATH='@BINDIR@'
+
+_resolve_bin() {
+  _rb_path=$(PATH="$_SUDO_SHIM_PATH" command -v "$1" 2>/dev/null) || _rb_path=
+  case "$_rb_path" in
+    '') [ "${2:-}" = optional ] && return 0; return 1 ;;
+    /*) printf '%s' "$_rb_path" ;;
+    *) return 1 ;;
+  esac
+}
+
+_is_hex64() {
+  case "$1" in
+    ''|*[!0-9A-Fa-f]*) return 1 ;;
+    *) [ "${#1}" -eq 64 ] ;;
+  esac
+}
+
+_first_hex64() {
+  # Intentional IFS split of one argument (whole checksum line).
+  # shellcheck disable=SC2086
+  for _tok in $1; do
+    _is_hex64 "$_tok" || continue
+    printf '%s\n' "$_tok"
+    return 0
+  done
+  return 1
+}
+
+# Path begins with / (wire EDITOR, policy paths).
+_is_abs_path() {
+  case "$1" in
+    /*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# True if path is /dev/... with no ".." segments (broker EDIT_BROKER_TTY; cf. SUDO_TTY).
+_is_dev_path() {
+  case "$1" in
+    *..*) return 1 ;;
+    /dev/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Non-empty ASCII decimal string (wire REQ_LEN / OUT_LEN / similar).
+_is_decimal() {
+  case "$1" in
+    ''|*[!0-9]*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# Non-empty ASCII octal digit string (e.g. stat mode from %a / %Lp, baked metadata mode).
+_is_octal() {
+  case "$1" in
+    ''|*[!0-7]*) return 1 ;;
+    *) return 0 ;;
+  esac
+}
+
+# Wire PRE_DIGEST (EDITBROKER/1): '-' or bare 64-hex digest.
+_check_digest() {
+  [ "$1" = '-' ] || _is_hex64 "$1"
+}
+
+# Baked install metadata from Makefile/stat: <sha256hex>:<uid>:<gid>:<mode>.
+_check_meta_str() {
+  _cms_head=${1%:*:*:*}
+  [ "$1" != "$_cms_head" ] && _is_hex64 "$_cms_head" || return 1
+
+  _cms_tail=${1##*:}
+  _is_octal "$_cms_tail" || return 1
+
+  _cms_ugm=${1#"$_cms_head":}
+  _cms_ug=${_cms_ugm%:"$_cms_tail"}  # <uid>:<gid>
+  _is_decimal "${_cms_ug%:*}" && _is_decimal "${_cms_ug##*:}"
+}
+
+_stat_fd_probe() {
+  _STAT_FD_FMT='%i'
+  _sfp_mk=$(_resolve_bin mktemp optional) || return 0
+  _sfp_rm=$(_resolve_bin rm optional) || return 0
+  _sfp_tmp=$("$_sfp_mk" "${TMPDIR:-/tmp}/.fd-XXXXXX") || return 0
+  (
+    exec 3>"$_sfp_tmp" || exit 1
+    _f=$("$_STAT" -L "$_STAT_FLAG" '%d:%i' /dev/fd/3 2>/dev/null) || exit 1
+    _p=$("$_STAT" "$_STAT_FLAG" '%d:%i' "$_sfp_tmp" 2>/dev/null) || exit 1
+    [ -n "$_f" ] && [ "$_f" = "$_p" ]
+  ) && _STAT_FD_FMT='%d:%i'
+  "$_sfp_rm" -f -- "$_sfp_tmp" 2>/dev/null
+  return 0
+}
+
+# GNU vs BSD stat(1): sets _STAT and all *_STAT_* format flags.
+# Callers: doas-sudo-shim edit mode (and _get_* helpers below), reference edit-broker (metadata).
+# Returns 2 if stat(1) is not in PATH, 1 if present but neither GNU nor BSD format works.
+_stat_probe() {
+  _STAT=$(_resolve_bin stat) || return 2
+  if "$_STAT" -c '%u' /dev/null >/dev/null 2>&1; then
+    _STAT_FLAG='-c'
+    _STAT_DIR_FMT='%d:%i:%Z:%Y:%a'
+    _STAT_UGM_FMT='%u:%g:%a'
+    _STAT_MTIME_FMT='%Y'
+    _STAT_SIZE_FMT='%s'
+  elif "$_STAT" -f '%u' /dev/null >/dev/null 2>&1; then
+    _STAT_FLAG='-f'
+    # %p includes setuid/setgid/sticky on directories (write-back snapshot).
+    _STAT_DIR_FMT='%d:%i:%c:%m:%p'
+    _STAT_UGM_FMT='%u:%g:%Lp'
+    _STAT_MTIME_FMT='%m'
+    _STAT_SIZE_FMT='%z'
+  else
+    return 1
+  fi
+  _stat_fd_probe || return 1
+  return 0
+}
+
+# Returns the device:inode of $1.
+_get_dev_inode() { "$_STAT" "$_STAT_FLAG" '%d:%i' "$1" 2>/dev/null; }
+
+# Returns the device:inode:ctime:mtime:mode tuple of $1 (directory snapshot).
+_get_dir_meta() { "$_STAT" "$_STAT_FLAG" "$_STAT_DIR_FMT" "$1" 2>/dev/null; }
+
+# Same as _get_inode but follows symlinks (-L). GNU /dev/fd/N is a symlink;
+# without -L, stat(1) reports the fd link inode, not the open file description.
+_get_fd_inode() { "$_STAT" -L "$_STAT_FLAG" "$_STAT_FD_FMT" "$1" 2>/dev/null || printf '%s' '-'; }
+
+# Returns the mtime of $1 as a decimal integer, or '-' on failure.
+# The '-' sentinel causes callers to treat the file as always modified.
+_get_mtime() { "$_STAT" "$_STAT_FLAG" "$_STAT_MTIME_FMT" "$1" 2>/dev/null || printf '%s' '-'; }
+
+# Returns byte size of $1 as a decimal integer, or '-' on stat failure.
+# '-' means unknown size. Callers must reject or abort.
+_get_size() { "$_STAT" "$_STAT_FLAG" "$_STAT_SIZE_FMT" "$1" 2>/dev/null || printf '%s' '-'; }
+
+# uid:gid:mode metadata for file $1.
+_get_ugm() { "$_STAT" "$_STAT_FLAG" "$_STAT_UGM_FMT" "$1" 2>/dev/null; }
+
+# Resolve SHA-256 tool -> _CKSUM, _CKSUM_FLAG (same selection everywhere).
+_cksum_init() {
+  _CKSUM=; _CKSUM_FLAG=
+  for _bin in sha256sum sha256 shasum; do
+    _CKSUM=$(_resolve_bin "$_bin" optional)
+    [ -n "$_CKSUM" ] || continue
+    [ "$_bin" = shasum ] && _CKSUM_FLAG='-a 256'
+    break
+  done
+  [ -n "$_CKSUM" ] || return 1
+  return 0
+}
+
+# SHA-256 checksum of file $1. Empty $_CKSUM_FLAG expands to no extra words.
+# shellcheck disable=SC2086
+_digest() { "$_CKSUM" $_CKSUM_FLAG <"$1" 2>/dev/null; }
+
+# First 64-hex SHA-256 token for file $1 (broker PRE/POST digest, install metadata).
+# Requires _cksum_init.
+_digest_hex64() {
+  _dg_raw=$(_digest "$1") || return 1
+  _first_hex64 "$_dg_raw" || return 1
+}
+
+# File $1 must match baked metadata line $2 (digest + uid:gid:mode from stat).
+_check_file_meta() {
+  _cfm_path="$1"
+  _cfm_baked="$2"
+  _cfm_hex=$(_digest_hex64 "$_cfm_path") || return 1
+  _cfm_ugm=$(_get_ugm "$_cfm_path") || return 1
+  [ "${_cfm_hex}:${_cfm_ugm}" = "$_cfm_baked" ]
+}
+
+# Binaries used by both doas-sudo-shim edit mode and the edit broker
+# (dd, rm, wc, mktemp, cat). Callers resolve awk locally if needed.
+# The shim resolves other edit-only tools (mv, tee, chmod, ...) locally after this.
+_resolve_edit_mode_tools() {
+  _DD=$(_resolve_bin dd) || return 1
+  _RM=$(_resolve_bin rm) || return 1
+  _WC=$(_resolve_bin wc) || return 1
+  _MKTEMP=$(_resolve_bin mktemp) || return 1
+  _CAT=$(_resolve_bin cat) || return 1
+  return 0
+}
+
+# Byte length of file $1 (wc -c; awk strips leading space). Requires _resolve_edit_mode_tools.
+_wc_bytes() {
+  # shellcheck disable=SC2016
+  _wcb=$("$_WC" -c <"$1" | "$_AWK" '{print $1}')
+  printf '%s\n' "$_wcb"
+}
+
+# Exactly $2 bytes from stdin -> file $1 (NUL-safe). Broker REQ_LEN body; shim OUT_LEN body.
+# Requires _resolve_edit_mode_tools.
+_read_exact() {
+  _re_out="$1"
+  _re_len="$2"
+
+  if [ "$_re_len" -eq 0 ] 2>/dev/null; then
+    : >"$_re_out" || return 1
+    return 0
+  fi
+
+  _re_bs=4096
+  _re_full=$(( _re_len / _re_bs ))
+  _re_rem=$(( _re_len % _re_bs ))
+
+  if [ "$_re_full" -gt 0 ] 2>/dev/null; then
+    "$_DD" bs="$_re_bs" count="$_re_full" of="$_re_out" 2>/dev/null || return 1
+  fi
+  if [ "$_re_rem" -gt 0 ] 2>/dev/null; then
+    _re_seek=$(( _re_full * _re_bs ))
+    "$_DD" bs=1 count="$_re_rem" seek="$_re_seek" conv=notrunc of="$_re_out" 2>/dev/null || return 1
+  fi
+
+  # Stdin can yield a short read without tripping dd(1); enforce exact byte count.
+  _re_got=$(_wc_bytes "$_re_out")
+  case "$_re_got" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$_re_got" -eq "$_re_len" ] 2>/dev/null || return 1
+  return 0
+}
+
+# Exactly $2 leading bytes from file $1 -> stdout (broker success body).
+# Depends on _resolve_edit_mode_tools.
+_write_exact() {
+  _we_in="$1"
+  _we_len="$2"
+
+  _we_bs=4096
+  _we_full=$(( _we_len / _we_bs ))
+  _we_rem=$(( _we_len % _we_bs ))
+
+  if [ "$_we_full" -gt 0 ]; then
+    "$_DD" if="$_we_in" bs="$_we_bs" count="$_we_full" 2>/dev/null
+  fi
+  if [ "$_we_rem" -gt 0 ]; then
+    _we_off=$(( _we_full * _we_bs ))
+    "$_DD" if="$_we_in" bs=1 count="$_we_rem" skip="$_we_off" 2>/dev/null
+  fi
+}
+
+# Startup after source: _stat_probe, _cksum_init, then validate _SHIM_UTILS_PATH
+# (_is_abs_path, _check_meta_str, _check_file_meta). Caller supplies fatal and
+# metadata; failures call fatal.
+_init() {
+  _stat_rc=0
+  _stat_probe || _stat_rc=$?
+  case "$_stat_rc" in
+    0) ;;
+    2) fatal 'stat not found in SHIM_PATH' ;;
+    *) fatal "stat(1) supports neither GNU (-c) nor BSD (-f) format; cannot continue" ;;
+  esac
+  _cksum_init || fatal "no SHA-256 checksum tool in SHIM_PATH (need sha256sum, sha256, or shasum)"
+  _is_abs_path "$_SHIM_UTILS_PATH" || fatal "shim utils path must be absolute: '$_SHIM_UTILS_PATH'"
+  _check_meta_str "$_SHIM_UTILS_METADATA" || fatal "shim utils metadata unset or invalid (expected '<sha256hex>:<uid>:<gid>:<mode>')"
+  _check_file_meta "$_SHIM_UTILS_PATH" "$_SHIM_UTILS_METADATA" || fatal 'shim utils metadata mismatch'
+}
+
+_init

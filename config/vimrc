@@ -1,0 +1,473 @@
+" ------------------------------------------------------------------------------------------
+" Bootstrap
+" ------------------------------------------------------------------------------------------
+set nocompatible
+
+" ------------------------------------------------------------------------------------------
+" Editing & indentation
+" ------------------------------------------------------------------------------------------
+set autoindent
+set smartindent
+set expandtab
+set tabstop=4
+set shiftwidth=4
+set softtabstop=0
+set smarttab
+set backspace=indent,eol,start
+
+" ------------------------------------------------------------------------------------------
+" UI (line numbers, splits, sign column, timeouts)
+" ------------------------------------------------------------------------------------------
+set number
+if exists('+signcolumn')
+  set signcolumn=yes
+endif
+set splitbelow
+set splitright
+set scrolloff=5
+set timeoutlen=250
+set ttimeoutlen=50
+
+" ------------------------------------------------------------------------------------------
+" Completion & wildmenu
+" ------------------------------------------------------------------------------------------
+set complete=.,w,b
+set completeopt=menu,menuone,longest,noselect
+set wildmenu
+set wildmode=longest:full,full
+if has('patch-8.2.4325')
+  set wildoptions=fuzzy,pum
+endif
+
+" ------------------------------------------------------------------------------------------
+" Search
+" ------------------------------------------------------------------------------------------
+set incsearch
+set hlsearch
+set ignorecase
+set smartcase
+
+" ------------------------------------------------------------------------------------------
+" Terminal
+" ------------------------------------------------------------------------------------------
+" $TERM is set by the edit broker from a fixed allowlist (see edit-broker.sh.in _SAFE_TERMS).
+
+" Clear host-query sequences (t_RV, t_u7, ...) to prevent reply injection from the terminal
+set t_RV=
+set t_u7=
+set t_RC=
+set t_RS=
+set t_RB=
+set t_RF=
+
+" t_u7 is off, so Vim cannot ask the cursor position; treat ambiguous-width codepoints as single-width.
+set ambiwidth=single
+
+" Disable focus reporting (prevents \<Esc>[I and \<Esc>[O injection on mouse enter/leave)
+set t_fe=
+set t_fd=
+
+" Do not emit title or icon sequences (t_ts, t_fs); they change host UI and can be abused for spoofing.
+set t_ts=
+set t_fs=
+
+if has('title')
+  set titlelen=0
+  set notitle
+  set noicon
+endif
+
+" Color escapes (eliminate reliance on terminfo for color)
+if has('termguicolors') && (&termguicolors || (&term =~ 'alacritty\|contour\|foot\|kitty\|wezterm\|.*256.*'))
+  set termguicolors
+  let &t_8f = "\<Esc>[38;2;%lu;%lu;%lum"
+  let &t_8b = "\<Esc>[48;2;%lu;%lu;%lum"
+elseif &term =~ 'linux\|linux-16color'
+  set t_Co=16
+  let &t_AF = "\<Esc>[3%dm"
+  let &t_AB = "\<Esc>[4%dm"
+else
+  set t_Co=256
+  let &t_AF = "\<Esc>[38;5;%dm"
+  let &t_AB = "\<Esc>[48;5;%dm"
+endif
+
+" ------------------------------------------------------------------------------------------
+" Syntax and colors
+" ------------------------------------------------------------------------------------------
+syntax on
+set background=dark
+if filereadable(expand('$VIMRUNTIME/colors/habamax.vim'))
+  colorscheme habamax
+else
+  colorscheme default
+endif
+
+if &term =~ 'linux\|linux-16color'
+  hi! ColorColumn cterm=reverse ctermfg=8 ctermbg=0
+endif
+hi! link StatusLineNC ColorColumn
+
+" ------------------------------------------------------------------------------------------
+" Statusline
+" ------------------------------------------------------------------------------------------
+set laststatus=2
+set noshowmode
+
+let s:stl_mode = {
+\  'n': 'NORMAL', 'c': 'COMMAND', 'i': 'INSERT', 'R': 'REPLACE',
+\  'v': 'VISUAL', 'V': 'V-LINE', "\<C-V>": 'V-BLOCK'
+\}
+let s:stl_sep = '%3(%)'
+let s:stl_tail = '%#ColorColumn#' . s:stl_sep
+\ . "%<%F%{&modified?'[+]':''}%{&readonly?' [RO]':''}"
+\ . '%='
+\ . s:stl_sep . "%{&filetype==''?'':'['.&filetype.']'}" . s:stl_sep
+\ . '%*' . s:stl_sep . '%p%%  |  Ln %l, Col %c' . s:stl_sep
+
+" %! runs as the current window; g:statusline_winid names the window drawing the line.
+function! s:LightStatusline() abort
+  let l:active = !exists('g:statusline_winid') || g:statusline_winid == win_getid()
+  let l:mode = ''
+  if l:active
+    if &modifiable && has_key(s:stl_mode, mode())
+      let l:mode = s:stl_sep . s:stl_mode[mode()] . s:stl_sep
+    elseif &filetype ==# 'help'
+      let l:mode = s:stl_sep . 'Help' . s:stl_sep
+    endif
+  endif
+  return l:mode . s:stl_tail
+endfunction
+
+" :set does not expand <SID>; use execute and expand('<SID>') (:help expand() <SID>)
+execute 'set statusline=%!' . expand('<SID>') . 'LightStatusline()'
+
+" ------------------------------------------------------------------------------------------
+" Clipboard & mouse
+" ------------------------------------------------------------------------------------------
+set clipboard=
+
+if has('mouse')
+  set mouse=a
+  set ttymouse=sgr
+endif
+
+" ------------------------------------------------------------------------------------------
+" Restricted execution, disk access, and trust
+" ------------------------------------------------------------------------------------------
+
+" External programs & option-based code paths
+set cedit=
+set completefunc=
+set equalprg=
+set foldexpr=
+set foldmethod=manual
+set formatprg=
+set formatexpr=
+set indentexpr=
+set keywordprg=:help
+set omnifunc=
+set operatorfunc=
+set tagfunc=
+
+" No on-disk temporaries / extra persistence
+set noswapfile
+set nobackup
+set nowritebackup
+set noundofile
+set updatecount=0
+set backupdir=/nonexistent
+set directory=/nonexistent
+set undodir=/nonexistent
+set viminfo=
+
+" Trust boundary (modelines, plugins, shell)
+set nomodeline
+set modelines=0
+set noexrc
+set noloadplugins
+set packpath=
+set secure
+set shell=/bin/false
+
+" ------------------------------------------------------------------------------------------
+" Tripwire
+" ------------------------------------------------------------------------------------------
+set updatetime=2000
+
+function! s:Quit()
+  echohl ErrorMsg | echomsg 'FATAL: File modified externally. Quitting.' | echohl None
+  redraw
+  sleep 1500ms
+  cquit!
+endfunction
+
+let s:quit_command = "\<C-\>\<C-N>:\<C-U>call " . expand('<SID>') . "Quit()\<CR>"
+
+" Poll the file on disk (checktime) on idle and buffer events; quit if it changed externally.
+augroup Tripwire
+  autocmd!
+  if exists('##SafeState')
+    autocmd SafeState * checktime
+  endif
+  autocmd BufEnter,CursorHold,CursorHoldI,FocusGained,InsertEnter,WinEnter * checktime
+  autocmd FileChangedShell * call feedkeys(s:quit_command, 'nt')
+augroup END
+
+" ------------------------------------------------------------------------------------------
+" Command-line allowlist
+" ------------------------------------------------------------------------------------------
+" Build exact-match regex from a list of command aliases
+function! s:BuildCmdRegex(commands)
+  return '^\%(' . join(a:commands, '\|') . '\)$'
+endfunction
+
+let s:CMD_DISPATCH_ERR = "\<C-E>\<C-U>echoerr 'Not allowed under editbroker profile'\<CR>"
+
+let s:ARGS_EMPTY = '^\s*$'
+let s:ARGS_OPT_BANG = '^\s*!\=\s*$'
+
+" Reject command chaining with '|'. Doubled backslashes before '|' are ignored.
+let s:UNESCAPED_PIPE = '\%(^\|[^\\]\)\%(\\\\\)*|'
+
+" Optional range, then \k* command, then args; matchlist()[1:2] is cname, cargs
+let s:CMD_REGEX = '^\s*'
+\ . '\%(\%(\d\+\|[.$%]\|''.\|<\|>\)\%([,;]\s*\%(\d\+\|[.$%]\|''.\|<\|>\)\)\=\s*\)\='
+\ . '\(\k*\)'
+\ . '\(.*\)$'
+
+let s:CMD_NO_ARGS_OPT_BANG = s:BuildCmdRegex([
+\  'w\%[rite]',
+\  'up\%[date]',
+\  'wa\%[ll]',
+\  'q\%[uit]',
+\  'wq\%[all]',
+\  'x\%[it]',
+\  'exi\%[t]',
+\  'qa\%[ll]',
+\  'xa\%[ll]',
+\  'clo\%[se]',
+\  'pc\%[lose]',
+\  'on\%[ly]',
+\  'bd\%[elete]',
+\  'bw\%[ipeout]',
+\  'redr\%[aw]',
+\  'redraws\%[tatus]',
+\])
+
+let s:CMD_NO_ARGS_ONLY = s:BuildCmdRegex([
+\  'sp\%[lit]',
+\  'vsp\%[lit]',
+\  'new',
+\  'vne\%[w]',
+\  'noh\%[lsearch]',
+\  'red\%[o]',
+\  'reg\%[isters]',
+\])
+
+let s:CMD_SUBSTITUTE = s:BuildCmdRegex(['s\%[ubstitute]'])
+let s:CMD_S_SUB_EVAL = '\\='
+
+let s:CMD_GLOBAL = s:BuildCmdRegex(['g\%[lobal]', 'v\%[global]'])
+" Allow most of the allowed ASCII punctuation as a delimiter
+let s:CMD_GLOBAL_ARGS = '^\s*\([-~!@#$%^&*()_=+,.<>/?;:]\)\(\\.\|\(\1\)\@![^\n]\)*\1\s*[dy]\=\s*$'
+
+" Commands with optional count and optional suffix f|s|m|h|d (:earlier/:later)
+let s:CMD_OPT_COUNT = s:BuildCmdRegex([
+\  'u\%[ndo]',
+\  'ear\%[lier]',
+\  'lat\%[er]',
+\])
+let s:CMD_OPT_COUNT_ARGS = '^\s*\%(\d\+[fsmhd]\=\)\=\s*$'
+
+let s:CMD_OPT_REG = s:BuildCmdRegex(['pu\%[t]'])
+let s:CMD_OPT_REG_ARGS_PRE = '^\s*[a-zA-Z0-9"_\-]\=\s*'
+let s:CMD_OPT_REG_ARGS = s:CMD_OPT_REG_ARGS_PRE . '$'
+
+let s:CMD_OPT_REG_COUNT = s:BuildCmdRegex([
+\  'd\%[elete][lp]\=',
+\  'y\%[ank]',
+\])
+let s:CMD_OPT_REG_COUNT_ARGS = s:CMD_OPT_REG_ARGS_PRE . '\d*\s*$'
+
+let s:CMD_ADDRESS = s:BuildCmdRegex([
+\  'co\%[py]',
+\  't',
+\  'm\%[ove]',
+\])
+let s:CMD_ADDRESS_ARGS = '^\s*\%(\d\+\|[.$]\|''.\|[+\-]\d*\)\s*$'
+
+let s:CMD_COLO = s:BuildCmdRegex(['colo\%[rscheme]'])
+let s:CMD_COLO_ARGS = '^\s*[a-zA-Z0-9_-]\+\s*$'
+
+" Restrict 'set' strictly to background toggling
+let s:CMD_SET = s:BuildCmdRegex(['se\%[t]'])
+let s:CMD_SET_BG_ARGS = '^\s*\(bg\|background\)=\(dark\|light\)\s*$'
+
+let s:CMD_HELP = s:BuildCmdRegex(['h\%[elp]'])
+let s:CMD_HELP_ARGS = '^\S\+\s*$'
+
+function! s:CmdCR()
+  let l:type = getcmdtype()
+
+  if l:type ==# '/' || l:type ==# '?'
+    return "\<CR>"
+  elseif l:type !=# ':'
+    return s:CMD_DISPATCH_ERR
+  endif
+
+  let l:cmd = getcmdline()
+
+  " Empty command line is allowed
+  if l:cmd =~# s:ARGS_EMPTY
+    return "\<CR>"
+  endif
+
+  if l:cmd =~# s:UNESCAPED_PIPE
+    return s:CMD_DISPATCH_ERR
+  endif
+
+  let l:m = matchlist(l:cmd, s:CMD_REGEX)
+
+  if empty(l:m)
+    return s:CMD_DISPATCH_ERR
+  endif
+
+  let l:cname = l:m[1]
+  let l:cargs = l:m[2]
+
+  " Allow line jumps
+  if l:cname ==# ''
+    if l:cargs =~# s:ARGS_EMPTY
+      return "\<CR>"
+    endif
+    return s:CMD_DISPATCH_ERR
+  endif
+
+  " No arguments and optional '!'.
+  if l:cname =~# s:CMD_NO_ARGS_OPT_BANG && l:cargs =~# s:ARGS_OPT_BANG
+    return "\<CR>"
+  endif
+
+  " Commands with no arguments.
+  if l:cname =~# s:CMD_NO_ARGS_ONLY && l:cargs =~# s:ARGS_EMPTY
+    return "\<CR>"
+  endif
+
+  if l:cname =~# s:CMD_SUBSTITUTE
+    " Disallow '\=' in replacement text to prevent arbitrary Vimscript execution.
+    if l:cargs =~# s:CMD_S_SUB_EVAL
+      return s:CMD_DISPATCH_ERR
+    endif
+    return "\<CR>"
+  elseif l:cname =~# s:CMD_GLOBAL && l:cargs =~# s:CMD_GLOBAL_ARGS
+    return "\<CR>"
+  elseif l:cname =~# s:CMD_OPT_COUNT && l:cargs =~# s:CMD_OPT_COUNT_ARGS
+    return "\<CR>"
+  elseif l:cname =~# s:CMD_OPT_REG && l:cargs =~# s:CMD_OPT_REG_ARGS
+    return "\<CR>"
+  elseif l:cname =~# s:CMD_OPT_REG_COUNT && l:cargs =~# s:CMD_OPT_REG_COUNT_ARGS
+    return "\<CR>"
+  elseif l:cname =~# s:CMD_ADDRESS && l:cargs =~# s:CMD_ADDRESS_ARGS
+    return "\<CR>"
+  elseif l:cname =~# s:CMD_COLO && l:cargs =~# s:CMD_COLO_ARGS
+    return "\<CR>"
+  elseif l:cname =~# s:CMD_SET && l:cargs =~# s:CMD_SET_BG_ARGS
+    return "\<CR>"
+  endif
+
+  " :help with zero or one topic token
+  if l:cname =~# s:CMD_HELP
+    let l:args = substitute(l:cargs, '^\s*', '', '')
+    if (l:args ==# '') || (l:args =~# s:CMD_HELP_ARGS)
+      return "\<CR>"
+    endif
+    return s:CMD_DISPATCH_ERR
+  endif
+  if l:cname ==# 'version'
+    return "\<CR>"
+  endif
+
+  return s:CMD_DISPATCH_ERR
+endfunction
+
+" ------------------------------------------------------------------------------------------
+" Key mappings
+" ------------------------------------------------------------------------------------------
+
+" Check if the character directly behind the cursor is a space/empty
+function! s:IsPrevCharSpace() abort
+  let l:col = col('.') - 1
+  return !l:col || getline('.')[l:col - 1] =~# '\s'
+endfunction
+
+" Normal, visual, and operator-pending modes: disable file/tag jumps and filters
+noremap "=             <Nop>
+noremap gf             <Nop>
+noremap gF             <Nop>
+noremap gx             <Nop>
+noremap <C-^>          <Nop>
+noremap <C-]>          <Nop>
+noremap g]             <Nop>
+noremap @              <Nop>
+noremap !              <Nop>
+noremap <C-Z>          <Nop>
+
+" Normal, visual, and operator-pending modes: disable window-based jumps
+noremap <C-W>f         <Nop>
+noremap <C-W>F         <Nop>
+noremap <C-W>]         <Nop>
+noremap <C-W>g]        <Nop>
+noremap <C-W>g<C-]>    <Nop>
+noremap <C-W>^         <Nop>
+noremap <C-W>gf        <Nop>
+noremap <C-W>}         <Nop>
+noremap <C-W>g}        <Nop>
+
+" Normal mode only: disable cmdline window, macros, Ex mode, mouse events
+nnoremap q:            <Nop>
+nnoremap q/            <Nop>
+nnoremap q?            <Nop>
+nnoremap Q             <Nop>
+nnoremap gQ            <Nop>
+nnoremap q             <Nop>
+nnoremap <C-LeftMouse> <Nop>
+nnoremap <RightMouse>  <Nop>
+nnoremap <S-LeftMouse> <Nop>
+
+" Visual mode ergonomics:
+" <Esc> aliases
+vnoremap jj            <Esc>
+vnoremap jk            <Esc>
+vnoremap kj            <Esc>
+
+" Insert and command modes: disable expression registers and suspend
+noremap! <C-R>=        <Nop>
+noremap! <C-R><C-R>=   <Nop>
+noremap! <C-R><C-O>=   <Nop>
+noremap! <C-R><C-P>=   <Nop>
+noremap! <C-Z>         <Nop>
+
+" Insert mode only: disable autocomplete sub-modes
+inoremap <C-X><C-]>    <Nop>
+inoremap <C-X><C-D>    <Nop>
+inoremap <C-X><C-I>    <Nop>
+inoremap <C-X><C-O>    <Nop>
+inoremap <C-X><C-U>    <Nop>
+
+" Insert mode ergonomics:
+" <Tab>: if following a space, insert tab; otherwise, trigger autocomplete.
+" <Esc> aliases
+inoremap <expr> <Tab>   pumvisible() ? "\<C-n>" : (<SID>IsPrevCharSpace() ? "\<Tab>" : "\<C-n>")
+inoremap <expr> <S-Tab> pumvisible() ? "\<C-p>" : "\<C-h>"
+inoremap jj            <Esc>
+inoremap jk            <Esc>
+inoremap kj            <Esc>
+
+" Command mode only: disable cmdline window
+cnoremap <C-F>         <Nop>
+cnoremap <C-\>e        <Nop>
+
+" Command mode dispatch: funnel all commands through the s:CmdCR allowlist
+cnoremap <expr> <CR> <SID>CmdCR()
+cnoremap <expr> <NL> <SID>CmdCR()

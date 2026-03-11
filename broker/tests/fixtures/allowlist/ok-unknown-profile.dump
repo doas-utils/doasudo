@@ -1,0 +1,3 @@
+STANZA nvim
+EXEC /stub/p/nvim
+ENDSTANZA

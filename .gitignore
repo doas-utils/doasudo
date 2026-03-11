@@ -1,0 +1,5 @@
+doas-sudo-shim
+lib/edit-broker-client.sh
+lib/shim-utils.sh
+broker/edit-broker.sh
+*.swp

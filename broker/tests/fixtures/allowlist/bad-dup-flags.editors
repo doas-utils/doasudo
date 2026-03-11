@@ -1,0 +1,4 @@
+[vim]
+path = /usr/bin/vim
+flags = -a
+flags = -b

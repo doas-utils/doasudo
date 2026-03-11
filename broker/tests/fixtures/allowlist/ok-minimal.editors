@@ -1,0 +1,10 @@
+# Test fixture (stub paths).
+[vim]
+path = /stub/p/vim
+path = /stub/p/vim-alias
+
+[nano]
+path = /stub/p/nano
+
+[red]
+path = /stub/p/red

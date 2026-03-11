@@ -1,0 +1,10 @@
+# doas-sudo-shim: narrow rule for the edit broker.
+# make install also writes this as doas-snippet.conf under DOAS_SNIPPET_DIR.
+#
+# Do not merge blindly. Adjust @DOAS_PERMIT_IDENTITY@ to match site policy.
+# Identity is who may run doas(1) to execute the broker as @EDIT_BROKER_USER@.
+#
+# Do not add keepenv: pass a minimal environment into the broker. The broker
+# should not read session variables from the caller.
+
+permit nopass @DOAS_PERMIT_IDENTITY@ as @EDIT_BROKER_USER@ cmd @EDIT_BROKER_PATH@

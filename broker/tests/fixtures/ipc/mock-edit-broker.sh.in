@@ -1,0 +1,171 @@
+#!/bin/sh
+# shellcheck disable=SC1007,SC2015
+set -eu
+
+# Same tool selection as shim (EDITBROKER/1: UTILS_METADATA + PRE_DIGEST; checksum not on wire).
+_sha='@MOCKBIN_SHA@'
+_sha_flag='@SHA_FLAG@'
+
+# Contract constants are baked at template-instantiation time by the harness so
+# the mock cannot drift from the shim's view of MAGIC.
+MAGIC='@MAGIC@'
+_expected_utils_meta='@UTILS_METADATA@'
+
+# sha256sum/shasum print hex plus noise; wire expects bare 64-hex token.
+_extract_hex() {
+  awk '{ for (i = 1; i <= NF; i++) if ($i ~ /^[0-9A-Fa-f]{64}$/) { print $i; exit } }'
+}
+
+_line=
+IFS= read -r _line || { printf 'RESP_CODE=1\n'; exit 0; }
+[ "$_line" = "MAGIC=$MAGIC" ] || { printf 'RESP_CODE=1\n'; exit 0; }
+
+IFS= read -r _line || { printf 'RESP_CODE=1\n'; exit 0; }
+case "$_line" in UTILS_METADATA=*) _um="${_line#UTILS_METADATA=}" ;; *) printf 'RESP_CODE=1\n'; exit 0 ;; esac
+[ "$_um" = "$_expected_utils_meta" ] || { printf 'RESP_CODE=1\n'; exit 0; }
+
+IFS= read -r _line || { printf 'RESP_CODE=1\n'; exit 0; }
+case "$_line" in EDITOR=*) _edw="${_line#EDITOR=}" ;; *) printf 'RESP_CODE=1\n'; exit 0 ;; esac
+_NL=$(printf '\n_'); _NL="${_NL%_}"
+_TAB=$(printf '\t')
+case "$_edw" in *"$_TAB"* | *"$_NL"* | *' '* ) printf 'RESP_CODE=1\n'; exit 0 ;; esac
+IFS= read -r _line || { printf 'RESP_CODE=1\n'; exit 0; }
+case "$_line" in
+  PRE_DIGEST=*) _pre_digest="${_line#PRE_DIGEST=}" ;;
+  *) printf 'RESP_CODE=1\n'; exit 0 ;;
+esac
+IFS= read -r _line || { printf 'RESP_CODE=1\n'; exit 0; }
+case "$_line" in REQ_LEN=*) _req_len="${_line#REQ_LEN=}" ;; *) printf 'RESP_CODE=1\n'; exit 0 ;; esac
+case "$_req_len" in ''|*[!0-9]*) printf 'RESP_CODE=1\n'; exit 0 ;; esac
+
+_tmp=$(mktemp "${TMPDIR:-/tmp}/mock-broker.XXXXXX")
+trap 'rm -f "$_tmp"' EXIT
+dd bs=1 count="$_req_len" of="$_tmp" 2>/dev/null || { printf 'RESP_CODE=1\n'; exit 0; }
+
+# Enforce EDITBROKER/1 PRE_DIGEST wire: '-' or bare 64-hex; when hex, must match body.
+case "$_pre_digest" in
+  -) ;;
+  '')
+    printf 'RESP_CODE=1\n'
+    exit 0 ;;
+  *)
+    case "$_pre_digest" in
+      *[!0-9A-Fa-f]*)
+        printf 'RESP_CODE=1\n'
+        exit 0 ;;
+    esac
+    [ "${#_pre_digest}" -eq 64 ] || { printf 'RESP_CODE=1\n'; exit 0; }
+    _expect=$("$_sha" $_sha_flag <"$_tmp" 2>/dev/null | _extract_hex) || _expect=
+    [ -n "$_expect" ] && [ "$_expect" = "$_pre_digest" ] || { printf 'RESP_CODE=1\n'; exit 0; }
+    ;;
+esac
+
+_mode="${MOCK_EDIT_BROKER_MODE:-success}"
+case "$_mode" in
+  error)
+    printf 'RESP_CODE=1\n'
+    exit 0 ;;
+  malformed_success)
+    printf 'RESP_CODE=0\n'
+    exit 0 ;;
+  missing_resp_code)
+    printf 'POST_DIGEST=0000000000000000000000000000000000000000000000000000000000000000\n'
+    printf 'OUT_LEN=1\n'
+    printf 'x'
+    exit 0 ;;
+  missing_post_digest)
+    printf 'RESP_CODE=0\n'
+    printf 'OUT_LEN=1\n'
+    printf 'x'
+    exit 0 ;;
+  wrong_order)
+    printf 'RESP_CODE=0\n'
+    printf 'OUT_LEN=1\n'
+    printf 'POST_DIGEST=0000000000000000000000000000000000000000000000000000000000000000\n'
+    printf 'x'
+    exit 0 ;;
+  bad_out_len)
+    printf 'RESP_CODE=0\n'
+    printf 'POST_DIGEST=0000000000000000000000000000000000000000000000000000000000000000\n'
+    printf 'OUT_LEN=abc\n'
+    printf 'x'
+    exit 0 ;;
+  duplicate_post_digest)
+    printf 'RESP_CODE=0\n'
+    printf 'POST_DIGEST=0000000000000000000000000000000000000000000000000000000000000000\n'
+    printf 'POST_DIGEST=0000000000000000000000000000000000000000000000000000000000000000\n'
+    printf 'OUT_LEN=1\n'
+    printf 'x'
+    exit 0 ;;
+  oversized_out_len)
+    printf 'RESP_CODE=0\n'
+    printf 'POST_DIGEST=0000000000000000000000000000000000000000000000000000000000000000\n'
+    printf 'OUT_LEN=99999999\n'
+    printf 'x'
+    exit 0 ;;
+  oversized_req_len)
+    printf 'RESP_CODE=1\n'
+    exit 0 ;;
+  bad_resp_code)
+    printf 'RESP_CODE=abc\n'
+    exit 0 ;;
+  out_of_range_resp_code)
+    printf 'RESP_CODE=999\n'
+    exit 0 ;;
+  bad_post_digest)
+    printf 'RESP_CODE=0\n'
+    printf 'POST_DIGEST=abcd\n'
+    printf 'OUT_LEN=1\n'
+    printf 'x'
+    exit 0 ;;
+  trailing_bytes)
+    printf 'broker edited content\n' >"$_tmp" ;;
+  post_digest_dash)
+    # Successful protocol frame but POST_DIGEST=- means broker checksum
+    # capture failure; shim must skip privileged write-back.
+    printf 'broker edited content\n' >"$_tmp"
+    ;;
+  post_digest_dash_trunc)
+    # Successful protocol frame but POST_DIGEST=- and body is truncated
+    # (OUT_LEN > actual printed bytes). Must remain fail-closed.
+    printf 'broker edited content\n' >"$_tmp"
+    ;;
+  timeout)
+    sleep 3
+    printf 'RESP_CODE=1\n'
+    exit 0 ;;
+  success)
+    printf 'broker edited content\n' >"$_tmp" ;;
+  passthrough) ;;
+  *)
+    printf 'RESP_CODE=1\n'
+    exit 0 ;;
+esac
+
+# shellcheck disable=SC2086
+if [ "$_mode" = 'post_digest_dash' ] || [ "$_mode" = 'post_digest_dash_trunc' ]; then
+  _post='-'
+else
+  _post=$("$_sha" $_sha_flag <"$_tmp" 2>/dev/null | _extract_hex) || _post=
+  [ -n "$_post" ] || { printf 'RESP_CODE=1\n'; exit 0; }
+fi
+_out_len=$(wc -c <"$_tmp" | awk '{print $1}')
+_body_print_n=
+if [ "$_mode" = 'post_digest_dash_trunc' ]; then
+  # Advertise a larger OUT_LEN than the bytes we actually print.
+  _out_len=3
+  _body_print_n=1
+fi
+
+printf 'RESP_CODE=0\n'
+printf 'POST_DIGEST=%s\n' "$_post"
+printf 'OUT_LEN=%s\n' "$_out_len"
+if [ -n "$_body_print_n" ]; then
+  dd bs=1 count="$_body_print_n" <"$_tmp" 2>/dev/null
+else
+  cat "$_tmp"
+fi
+if [ "$_mode" = 'trailing_bytes' ]; then
+  printf 'X'
+fi
+exit 0

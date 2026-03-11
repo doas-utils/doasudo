@@ -1,0 +1,15 @@
+# Example editor allowlist for the edit broker
+#
+# The broker choses the `EDITOR=` path from matched `path =` lines; the first
+# stanza wins. For more details see `broker/Editor Allowlist Spec.md`
+
+# [vi] is accepted as an alias for [vim]. Use [vim] in new configurations.
+[vim]
+path = /usr/bin/vim
+path = /usr/local/bin/vim
+
+[nano]
+path = /usr/bin/nano
+
+[red]
+path = /usr/bin/red

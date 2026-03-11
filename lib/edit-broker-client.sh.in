@@ -1,0 +1,192 @@
+# SPDX-License-Identifier: MIT
+# See LICENSE.md. Part of doas-utils/doas-sudo-shim.
+#
+# EDITBROKER/1 client: sourced by doas-sudo-shim (broker mode only).
+# `_run_edit_broker` follows the IPC protocol from `broker/Broker IPC Spec.md`.
+#
+# _EDIT_BROKER_USER, _MAGIC, _MAX_BROKER_BYTES, and _BROKER_RESPONSE_TIMEOUT_S
+# are embedded at build time; must match the broker and doas.conf.
+
+# shellcheck shell=sh disable=SC2154,SC2317
+
+# ----- Baked config (all @...@ substitutions must appear up-front) ------------------------
+_EDIT_BROKER_USER='@EDIT_BROKER_USER@'
+_MAGIC='@MAGIC@'
+_MAX_BROKER_BYTES='@MAX_BROKER_BYTES@'
+_BROKER_RESPONSE_TIMEOUT_S='@BROKER_RESPONSE_TIMEOUT_S@'
+
+# Runs the optional edit broker against $1 (tmpfile path).
+# On success, rewrites $1 with broker output and sets _digest_post_editor from
+# POST_DIGEST in the broker response.
+# Returns:
+#   0 broker success
+#   1 broker/protocol failure (caller fail-closed)
+_run_edit_broker() {
+  # ---- Request body size envelope (tmpfile bytes -> REQ_LEN) -----------------------------
+  _reb_tmpfile=$1
+  _reb_req="${_tmpdir}/.broker.req"
+  _reb_rsp="${_tmpdir}/.broker.rsp"
+  _reb_err="${_tmpdir}/.broker.err"
+
+  _reb_req_len=$(_get_size "$_reb_tmpfile")
+  _is_decimal "$_reb_req_len" || {
+    edit_mode_info "broker request size is not decimal"
+    return 1
+  }
+  [ "$_reb_req_len" -le "$_MAX_BROKER_BYTES" ] 2>/dev/null || {
+    edit_mode_info "broker request size exceeds MAX_BROKER_BYTES for '${_f}'"
+    return 1
+  }
+
+  # ---- PRE_DIGEST wire (64-hex or '-'; raw tool lines are not sent) ----------------------
+  # Broker and shim share shim-utils.sh (same baked SHIM_PATH).
+  _reb_pre_digest='-'
+  if [ "$_digest_pre_editor" != '-' ]; then
+    _reb_pre_digest=$(_first_hex64 "$_digest_pre_editor") || {
+      edit_mode_info "cannot normalize PRE_DIGEST for broker request (expected 64-hex token or '-')"
+      return 1
+    }
+  fi
+
+  # ---- Build request file (header lines + NUL-safe body cat) -----------------------------
+  {
+    printf 'MAGIC=%s\n' "$_MAGIC"
+    printf 'UTILS_METADATA=%s\n' "$_SHIM_UTILS_METADATA"
+    printf 'EDITOR=%s\n' "$_editor"
+    printf 'PRE_DIGEST=%s\n' "$_reb_pre_digest"
+    printf 'REQ_LEN=%s\n' "$_reb_req_len"
+    "$_CAT" -- "$_reb_tmpfile"
+  } >"$_reb_req" || {
+    edit_mode_info "failed to build broker request"
+    return 1
+  }
+
+  # ---- Run broker (background) and enforce response timeout ------------------------------
+  _reb_rc=0
+  "$_DOAS" ${flag_n:+"-n"} -u "$_EDIT_BROKER_USER" -- "$_EDIT_BROKER_PATH" \
+    <"$_reb_req" >"$_reb_rsp" 2>"$_reb_err" &
+  _reb_pid=$!
+  _reb_waited=0
+  while kill -0 "$_reb_pid" 2>/dev/null; do
+    if [ "$_reb_waited" -ge "$_BROKER_RESPONSE_TIMEOUT_S" ]; then
+      kill "$_reb_pid" 2>/dev/null || true
+      if kill -0 "$_reb_pid" 2>/dev/null; then
+        kill -9 "$_reb_pid" 2>/dev/null || true
+      fi
+      wait "$_reb_pid" 2>/dev/null || true
+      edit_mode_info "broker response timed out for '${_f}' (${_BROKER_RESPONSE_TIMEOUT_S}s)"
+      return 1
+    fi
+    "$_SLEEP" 1
+    _reb_waited=$((_reb_waited + 1))
+  done
+  wait "$_reb_pid" || _reb_rc=$?
+  [ "$_reb_rc" -eq 0 ] || {
+    _reb_msg=$("$_CAT" -- "$_reb_err" 2>/dev/null || true)
+    edit_mode_info "broker invocation failed for '${_f}' (status ${_reb_rc})${_reb_msg:+: $_reb_msg}"
+    return 1
+  }
+
+  # ---- Open response; parse RESP_CODE (success path only: RESP_CODE=0) -------------------
+  exec 5<"$_reb_rsp" || {
+    edit_mode_info "cannot open broker response for '${_f}'"
+    return 1
+  }
+  _reb_fail() { exec 5<&-; edit_mode_info "$1"; }
+  IFS= read -r _reb_line <&5 || { _reb_fail "empty broker response for '${_f}'"; return 1; }
+  case "$_reb_line" in
+    RESP_CODE=*) _reb_code="${_reb_line#RESP_CODE=}" ;;
+    *) _reb_fail "invalid broker response prefix for '${_f}': ${_reb_line}"; return 1 ;;
+  esac
+  _is_decimal "$_reb_code" || {
+    _reb_fail "non-decimal RESP_CODE from broker for '${_f}'"
+    return 1
+  }
+  [ "$_reb_code" -le 255 ] 2>/dev/null || {
+    _reb_fail "out-of-range RESP_CODE from broker for '${_f}'"
+    return 1
+  }
+  [ "$_reb_code" -eq 0 ] || {
+    _reb_fail "broker returned ${_reb_line} for '${_f}'"
+    return 1
+  }
+
+  # ---- POST_DIGEST header line and wire format check -------------------------------------
+  IFS= read -r _reb_post <&5 || { _reb_fail "missing POST_DIGEST from broker for '${_f}'"; return 1; }
+  case "$_reb_post" in
+    POST_DIGEST=*) _reb_post="${_reb_post#POST_DIGEST=}" ;;
+    *) _reb_fail "malformed POST_DIGEST from broker for '${_f}'"; return 1 ;;
+  esac
+  _check_digest "$_reb_post" || {
+    _reb_fail "invalid POST_DIGEST format from broker for '${_f}'"
+    return 1
+  }
+
+  # ---- OUT_LEN header line and size bounds -----------------------------------------------
+  IFS= read -r _reb_out_len <&5 || { _reb_fail "missing OUT_LEN from broker for '${_f}'"; return 1; }
+  case "$_reb_out_len" in
+    OUT_LEN=*) _reb_out_len="${_reb_out_len#OUT_LEN=}" ;;
+    *) _reb_fail "malformed OUT_LEN from broker for '${_f}'"; return 1 ;;
+  esac
+  _is_decimal "$_reb_out_len" || {
+    _reb_fail "non-decimal OUT_LEN from broker for '${_f}'"
+    return 1
+  }
+  [ "$_reb_out_len" -le "$_MAX_BROKER_BYTES" ] 2>/dev/null || {
+    _reb_fail "broker OUT_LEN exceeds MAX_BROKER_BYTES for '${_f}'"
+    return 1
+  }
+
+  # ---- Read OUT_LEN bytes into tmpfile (_read_exact; fd 5 = response after headers) ------
+  _read_exact "$_reb_tmpfile" "$_reb_out_len" <&5 || {
+    _reb_body_n=$(_get_size "$_reb_tmpfile")
+    case "$_reb_body_n" in
+      ''|'-') _reb_fail "failed to read broker response body for '${_f}'"; return 1 ;;
+    esac
+    [ "$_reb_body_n" -eq "$_reb_out_len" ] 2>/dev/null || {
+      _reb_fail "broker response body truncated for '${_f}' (expected OUT_LEN=$_reb_out_len, got $_reb_body_n)"
+      return 1
+    }
+    _reb_fail "failed to read broker response body for '${_f}'"
+    return 1
+  }
+
+  # ---- No bytes after success body (RESP_CODE=0 frame ends after OUT_LEN) ----------------
+  _reb_tail="${_tmpdir}/.broker.tail"
+  "$_CAT" <&5 >"$_reb_tail" || {
+    _reb_fail "failed to validate broker response tail for '${_f}'"
+    return 1
+  }
+  if [ -s "$_reb_tail" ]; then
+    _reb_fail "unexpected trailing data in broker response for '${_f}'"
+    return 1
+  fi
+  exec 5<&-
+
+  # ---- POST_DIGEST=-: checksum unavailable; skip digest match and write-back -------------
+  if [ "$_reb_post" = '-' ]; then
+    _digest_post_editor=
+    return 0
+  fi
+  _reb_local_digest=$(_digest "$_reb_tmpfile") || _reb_local_digest=
+  [ -n "$_reb_local_digest" ] || {
+    edit_mode_info "could not compute local post-broker digest for '${_f}'"
+    return 1
+  }
+  _reb_local_hex=$(_first_hex64 "$_reb_local_digest") || {
+    edit_mode_info "could not normalize local post-broker digest for '${_f}'"
+    return 1
+  }
+  [ "$_reb_local_hex" = "$_reb_post" ] || {
+    edit_mode_info "broker POST_DIGEST mismatch for '${_f}'"
+    return 1
+  }
+  if [ "$_reb_pre_digest" != '-' ] && [ "$_reb_post" != '-' ] && [ "$_reb_local_hex" = "$_reb_pre_digest" ]; then
+    _tmpfile_unchanged=1
+  fi
+
+  # Full checksum line for write-back; shape matches the non-broker edit path.
+  _digest_post_editor="$_reb_local_digest"
+
+  return 0
+}

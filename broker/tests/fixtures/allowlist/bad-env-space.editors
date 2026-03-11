@@ -1,0 +1,3 @@
+[vim]
+path = /usr/bin/vim
+env = A=hello world

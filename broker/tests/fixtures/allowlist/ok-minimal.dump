@@ -1,0 +1,10 @@
+STANZA vim
+EXEC /stub/p/vim
+ALIAS /stub/p/vim-alias
+ENDSTANZA
+STANZA nano
+EXEC /stub/p/nano
+ENDSTANZA
+STANZA red
+EXEC /stub/p/red
+ENDSTANZA

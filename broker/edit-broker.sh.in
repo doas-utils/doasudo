@@ -1,0 +1,508 @@
+#!/bin/sh
+
+# SPDX-License-Identifier: MIT
+# See LICENSE.md. Part of doas-utils/doas-sudo-shim.
+#
+# ---
+#
+# SECURITY NOTE
+#
+# Default edit mode in doas-sudo-shim.in stages each file under the invoking
+# user; the shim's SECURITY NOTE at the top of that file documents a set of
+# mitigations for that layout. Same-UID exposure of the temporary file during
+# the lifetime of the editor session remains within that trust boundary.
+#
+# This script is an optional broker: it runs as a dedicated UID (see
+# EDIT_BROKER_USER / packaging). Staging and the editor child operate in
+# broker-owned directories, not the invoker's tree, so the mutable copy is not
+# held in user space beside the caller. Privileged write-back in the shim is
+# unchanged; edited bytes reach it through the framed EDITBROKER/1 protocol
+# after broker-side checks (broker/Broker IPC Spec.md).
+#
+# Request fields are untrusted input. EDITOR= on the wire is a lookup key only;
+# broker allowlist matching is path-only, and the broker composes argv from an
+# internal registry template for the canonical PROFILE, not from admin-supplied
+# flags/env tokens (broker/Editor Allowlist Spec.md). Fail-closed parsing, size
+# caps, digests, and response shape follow the IPC spec; malformed or oversized
+# traffic aborts the session.
+#
+# The shim checks EDIT_BROKER_METADATA before broker mode; the wire carries
+# UTILS_METADATA which must match the installed shim-utils.sh the broker
+# sources. Allowlist content is operator policy (not content-hashed at install);
+# broker validates allowlist and editor-path metadata (owner, mode) and verifies
+# shipped config metadata for profile-selected config basenames before parse.
+#
+# Out of scope: doas.conf quality; trust in the session TTY; allowlisted editors
+# remain arbitrary code under policy; client timeouts (BROKER_RESPONSE_TIMEOUT_S)
+# bound wait, not liveness guarantees.
+
+# set -u, not set -e: failing commands need || fail so stdout prints RESP_CODE;
+# set -e would exit non-zero with no RESP_CODE line.
+set -u
+
+_NL=$(printf '\n_'); _NL="${_NL%_}"
+_TAB=$(printf '\t')
+
+# ---- Configuration -----------------------------------------------------------------------
+
+# Baked at install; not set from the environment. @BINDIR@ is Makefile SHIM_PATH
+# (same as shim-utils).
+_SHIM_UTILS_PATH='@SHIM_UTILS@'
+_SHIM_UTILS_METADATA='@UTILS_METADATA@'
+_EDIT_BROKER_STAGING_DIR='@EDIT_BROKER_STAGING_DIR@'
+_EDIT_BROKER_TTY='@EDIT_BROKER_TTY@'
+_ALLOWLIST_PATH='@ALLOWLIST_PATH@'
+_ALLOWLIST_PARSER='@ALLOWLIST_PARSER@'
+_BROKER_CONFIG_DIR='@BROKER_CONFIG_DIR@'
+_BROKER_CONFIG_VIMRC_METADATA='@BROKER_CONFIG_VIMRC_METADATA@'
+_MAGIC='@MAGIC@'
+_MAX_BROKER_BYTES='@MAX_BROKER_BYTES@'
+
+# env -i baseline for the editor child (see Editor Allowlist Spec.md).
+# HOME=/nonexistent avoids history/recovery/undo writes under the broker work tree.
+_EDIT_BROKER_EDITOR_HOME=/nonexistent
+_EDIT_BROKER_EDITOR_SHELL=/bin/false
+
+# Safe $TERM values for the editor child (diff-friendly list).
+_SAFE_TERMS='
+ansi
+alacritty
+contour
+foot
+linux
+linux-16color
+kitty
+rxvt-256color
+rxvt-unicode-256color
+screen
+screen-256color
+st-256color
+tmux
+tmux-256color
+xterm
+xterm-256color
+vt100
+vt220
+wezterm
+'
+
+# ---- Helpers -----------------------------------------------------------------------------
+
+fail() {
+  # Print RESP_CODE=1 to stdout, which the shim parser requires.
+  # Print diagnostics to stderr.
+  printf 'RESP_CODE=1\n'
+  printf 'broker: %s\n' "${1:-unspecified failure}" >&2
+  exit 0
+}
+fatal() { fail "$*"; } # shim-utils _init calls fatal
+
+[ -r "$_SHIM_UTILS_PATH" ] || fail "missing shim utils: $_SHIM_UTILS_PATH (install doas-sudo-shim libexec components)"
+# shellcheck source=../lib/shim-utils.sh
+. "$_SHIM_UTILS_PATH"
+
+_resolve_edit_mode_tools || fail 'shared utils missing from SHIM_PATH (dd, rm, mktemp, wc, cat)'
+_AWK=$(_resolve_bin awk) || fail 'awk not found in SHIM_PATH'
+_MKDIR=$(_resolve_bin mkdir) || fail 'mkdir not found in SHIM_PATH'
+_RMDIR=$(_resolve_bin rmdir) || fail 'rmdir not found in SHIM_PATH'
+_TTY=$(_resolve_bin tty optional)
+
+_sanitize_term() {
+  _st_term="${TERM:-}"
+  for _st_t in $_SAFE_TERMS; do
+    [ "$_st_t" = "$_st_term" ] && {
+      printf '%s' "$_st_term"
+      return 0
+    }
+  done
+  printf '%s' xterm-256color
+}
+
+# Allowlist file: root:root only; not writable by group or others (mode & 022 == 0).
+# Policy gate: parse errors are fail-closed; a writable allowlist is misconfiguration.
+_check_allowlist_meta() {
+  _alm_ugm=$(_get_ugm "$1") || return 1
+  [ $(( 0${_alm_ugm##*:} & 022 )) -eq 0 ] 2>/dev/null || return 1
+  case ${_alm_ugm%:*} in
+    0:0) return 0;;
+    *) return 1 ;;
+  esac
+}
+
+_check_vim() {
+  _cv_path=$1
+  : "${_cv_cache_path:=}"
+  : "${_cv_cache_ok:=}"
+  if [ "${_cv_cache_path:-}" = "$_cv_path" ] && [ -n "${_cv_cache_ok:-}" ]; then
+    [ "$_cv_cache_ok" = 1 ]
+    return
+  fi
+
+  _cv_out=$("$_cv_path" --version 2>/dev/null || true)
+  _cv_cache_path=$_cv_path
+  _cv_cache_ok=0
+  case "$_cv_out" in
+    *VIM*'+autocmd'*'+eval'*)
+      _cv_cache_ok=1
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+# PROFILE -> argv template (_editor_flags), shipped config basename (_config_file),
+# runtime probe tag (_runtime_tag), baked stat digest (_config_metadata).
+_resolve_editor() {
+  _editor_flags=
+  _config_file=
+  _runtime_tag=
+  _config_metadata=
+  case "$1" in
+    vim)
+      # shellcheck disable=SC2016
+      _editor_flags='-u $CONFIG -U NONE -i NONE -N -Z'
+      _config_file='vimrc'
+      _runtime_tag='vim'
+      _config_metadata="$_BROKER_CONFIG_VIMRC_METADATA"
+      ;;
+    nano)
+      _editor_flags='--restricted --linenumbers --nowrap --smarthome'
+      ;;
+    red)
+      _editor_flags='-p >'
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+  return 0
+}
+
+_expand_config() {
+  # shellcheck disable=SC2016
+  _ecit_cfg='$CONFIG'
+  _ecit_t=$1
+  _ecit_c=$2
+  _ecit_pre="${_ecit_t%"${_ecit_cfg}"*}"
+  _ecit_post="${_ecit_t#*"${_ecit_cfg}"}"
+  printf '%s' "${_ecit_pre}${_ecit_c}${_ecit_post}"
+}
+
+# Per-TTY session lock (mkdir). Busy if the recorded pid is alive; else remove
+# stale lock and retry once (PID reuse risk: see docs).
+#
+# $1: lock directory path (derived from resolved TTY device at runtime).
+_acquire_session_lock() {
+  _asl="$1"
+  case "$_asl" in
+    "$_EDIT_BROKER_STAGING_DIR"/*) ;;
+    *) return 1 ;;
+  esac
+  case "$_asl" in *..*) return 1 ;; esac
+  _asl_try=0
+  while [ "$_asl_try" -lt 2 ]; do
+    if "$_MKDIR" "$_asl" 2>/dev/null; then
+      printf '%s\n' $$ >"$_asl/pid" || {
+        "$_RM" -f "$_asl/pid" 2>/dev/null
+        "$_RMDIR" "$_asl" 2>/dev/null
+        return 1
+      }
+      return 0
+    fi
+    _asl_op=
+    if [ -f "$_asl/pid" ]; then
+      IFS= read -r _asl_op <"$_asl/pid" || _asl_op=
+    fi
+    _is_decimal "$_asl_op" || _asl_op=
+    if [ -n "$_asl_op" ] && kill -0 "$_asl_op" 2>/dev/null; then
+      return 1
+    fi
+    "$_RM" -f "$_asl/pid" 2>/dev/null
+    "$_RMDIR" "$_asl" 2>/dev/null
+    _asl_try=$((_asl_try + 1))
+  done
+  return 1
+}
+
+# Resolves the real terminal device from the already-open TTY fd 3.
+# /dev/tty is a per-process alias; tty(1) on the opened fd reports the
+# underlying device (e.g. /dev/pts/3), which differs across terminals.
+# Falls back to the baked _EDIT_BROKER_TTY when tty(1) is unavailable or
+# the fd is not a terminal (e.g. /dev/null in test harnesses).
+_resolve_real_tty() {
+  _rrt=
+  if [ -n "$_TTY" ]; then
+    _rrt=$("$_TTY" 0<&3 2>/dev/null) || _rrt=
+    _is_dev_path "$_rrt" || _rrt=
+  fi
+  [ -n "$_rrt" ] || _rrt="$_EDIT_BROKER_TTY"
+  printf '%s' "$_rrt"
+}
+
+# Derives a lock-safe slug from a /dev/ path: strips /dev/, replaces / with -.
+# /dev/pts/3 -> pts-3, /dev/ttyS0 -> ttyS0, /dev/null -> null.
+_tty_lock_slug() {
+  _tls="${1#/dev/}"
+  "$_AWK" -v s="$_tls" 'BEGIN { gsub(/\//, "-", s); printf "%s", s }'
+}
+
+_open_tty() {
+  # Open _EDIT_BROKER_TTY for editor stdin/stdout/stderr (default bake: /dev/tty).
+  # The fd numbers are fixed: 3 for input, 4 for output.
+  #
+  # Important: open TTY *before* consuming request body bytes from stdin.
+  #
+  # `{ ...; } 2>/dev/null` scopes the stderr redirection; a bare
+  # `exec 3<file 2>/dev/null` mutes stderr for the rest of the broker session.
+  _is_dev_path "$_EDIT_BROKER_TTY" || return 1
+  { exec 3<"$_EDIT_BROKER_TTY"; } 2>/dev/null || return 1
+  { exec 4>"$_EDIT_BROKER_TTY"; } 2>/dev/null || return 1
+  return 0
+}
+
+# ---- Parse fixed header lines ------------------------------------------------------------
+
+_line=
+IFS= read -r _line || fail 'missing MAGIC line'
+[ "$_line" = "MAGIC=$_MAGIC" ] || fail 'bad MAGIC line'
+
+IFS= read -r _line || fail 'missing UTILS_METADATA line'
+case "$_line" in
+  UTILS_METADATA=*) _utils_meta_req="${_line#UTILS_METADATA=}" ;;
+  *) fail 'bad UTILS_METADATA line' ;;
+esac
+[ "$_utils_meta_req" = "$_SHIM_UTILS_METADATA" ] || fail 'shim utils metadata wire mismatch'
+
+IFS= read -r _line || fail 'missing EDITOR line'
+case "$_line" in
+  EDITOR=*) _editor_req="${_line#EDITOR=}" ;;
+  *) fail 'bad EDITOR line' ;;
+esac
+case "$_editor_req" in
+  *"$_TAB"* | *"$_NL"* | *' '*)
+    fail 'EDITOR wire must be a single path (no tab, newline, or space)' ;;
+esac
+_is_abs_path "$_editor_req" || fail 'EDITOR must be absolute'
+
+IFS= read -r _line || fail 'missing PRE_DIGEST line'
+case "$_line" in
+  PRE_DIGEST=*) _pre_digest="${_line#PRE_DIGEST=}" ;;
+  *) fail 'bad PRE_DIGEST line' ;;
+esac
+_check_digest "$_pre_digest" || fail 'invalid PRE_DIGEST wire (expected 64-hex or -)'
+
+IFS= read -r _line || fail 'missing REQ_LEN line'
+case "$_line" in
+  REQ_LEN=*) _req_len="${_line#REQ_LEN=}" ;;
+  *) fail 'bad REQ_LEN line' ;;
+esac
+_is_decimal "$_req_len" || fail 'REQ_LEN not decimal'
+# Shell integer compare is unsafe for values beyond signed long on some hosts
+# (e.g. 32-bit wrap). 2>/dev/null suppresses overflow noise from some shells.
+# Production broker should use strtoull-style parsing in C.
+[ "$_req_len" -le "$_MAX_BROKER_BYTES" ] 2>/dev/null || fail 'REQ_LEN exceeds MAX_BROKER_BYTES'
+
+# ---- Open TTY for interactive editors ----------------------------------------------------
+#
+# Opened before lock acquisition so the broker can resolve the real terminal
+# device and derive a per-TTY lock path. Two broker invocations from different
+# terminals (different /dev/pts/N) proceed concurrently; two from the same
+# terminal are serialized.
+
+_open_tty || fail 'failed to open controlling TTY'
+
+# ---- Per-TTY session lock ----------------------------------------------------------------
+
+_real_tty=$(_resolve_real_tty)
+_tty_slug=$(_tty_lock_slug "$_real_tty")
+[ -n "$_tty_slug" ] || fail 'could not derive TTY lock slug'
+[ "${#_tty_slug}" -le 64 ] || fail 'TTY lock slug exceeds 64 characters'
+_session_lock="${_EDIT_BROKER_STAGING_DIR}/.edit-broker-lock-${_tty_slug}"
+
+_acquire_session_lock "$_session_lock" \
+  || fail "TTY session lock busy (another edit is active on ${_real_tty})"
+
+# shellcheck disable=SC2317
+_broker_exit_cleanup() {
+  # EXIT may run with noglob still enabled (e.g. signal during the flags loop).
+  set +f
+  case "${_scratch_dir:-}" in
+    "$_EDIT_BROKER_STAGING_DIR"/.broker-scratch.*)
+      "$_RM" -rf "$_scratch_dir" 2>/dev/null || true
+      ;;
+  esac
+  "$_RM" -f "${_session_lock:-}/pid" 2>/dev/null || true
+  "$_RMDIR" "${_session_lock:-}" 2>/dev/null || true
+}
+# Same pattern as doas-sudo-shim edit mode: EXIT holds cleanup; HUP/INT/TERM/QUIT
+# exit through normal shell teardown so EXIT runs (portable vs relying on EXIT
+# alone after async signals). Broker uses exit 0 for protocol; shim uses exit 1.
+trap '_broker_exit_cleanup' EXIT
+trap 'exit 0' HUP INT TERM QUIT
+
+# Per-invocation scratch directory under staging. Keep all temp artefacts here
+# so cleanup has a single rm -rf path (avoids per-file cleanup drift).
+_scratch_dir=$("$_MKTEMP" -d "${_EDIT_BROKER_STAGING_DIR}/.broker-scratch.XXXXXXXX") \
+  || fail "mktemp -d failed under staging dir: $_EDIT_BROKER_STAGING_DIR (make install / post-install / permissions?)"
+
+# ---- Stage request body ------------------------------------------------------------------
+
+umask 077
+_tmpfile="$("$_MKTEMP" "${_scratch_dir}/.body.XXXXXXXX")" \
+  || fail "mktemp failed under broker scratch dir: $_scratch_dir"
+
+_read_exact "$_tmpfile" "$_req_len" \
+  || fail 'failed to read request body (I/O error or not exactly REQ_LEN bytes)'
+
+# ---- Allowlist match + build exec argv (profile stanzas; allowlist-parse.awk) -----------
+
+[ -n "$_BROKER_CONFIG_DIR" ] || fail 'broker missing config dir bake (rebuild required)'
+[ -r "$_ALLOWLIST_PATH" ] || fail "allowlist not readable: $_ALLOWLIST_PATH"
+[ -r "$_ALLOWLIST_PARSER" ] || fail "allowlist parser not readable: $_ALLOWLIST_PARSER"
+_check_allowlist_meta "$_ALLOWLIST_PATH" \
+  || fail "allowlist must be root-owned, not group/other-writable: $_ALLOWLIST_PATH"
+
+_prof_out=$("$_MKTEMP" "${_scratch_dir}/.profile.XXXXXXXX") \
+  || fail "mktemp failed for profile scratch under $_scratch_dir"
+_al_stderr=$("$_MKTEMP" "${_scratch_dir}/.allowlist-stderr.XXXXXXXX") \
+  || fail "mktemp failed for allowlist awk stderr under $_scratch_dir"
+: >"$_al_stderr"
+
+_al_rc=0
+"$_AWK" -v EDITOR="$_editor_req" -f "$_ALLOWLIST_PARSER" "$_ALLOWLIST_PATH" >"$_prof_out" 2>"$_al_stderr" \
+  || _al_rc=$?
+
+if [ "$_al_rc" -eq 2 ]; then
+  fail 'editor not in broker allowlist'
+fi
+if [ "$_al_rc" -eq 1 ]; then
+  [ ! -s "$_al_stderr" ] || "$_CAT" "$_al_stderr" >&2
+  fail 'broker: allowlist parse error'
+fi
+if [ "$_al_rc" -ne 0 ]; then
+  fail "broker: allowlist query failed (exit $_al_rc)"
+fi
+
+_editor_exec_path=""
+_editor_profile=""
+_saw_exec=0
+_saw_profile=0
+while IFS= read -r _ql || [ -n "$_ql" ]; do
+  case "$_ql" in
+    '')
+      ;;
+    'EXEC '*)
+      _editor_exec_path=${_ql#EXEC }
+      _saw_exec=1
+      ;;
+    'PROFILE '*)
+      _editor_profile=${_ql#PROFILE }
+      _saw_profile=1
+      ;;
+    *)
+      fail 'invalid line in allowlist query output'
+      ;;
+  esac
+done <"$_prof_out"
+
+if [ "$_saw_exec" -ne 1 ] || [ -z "$_editor_exec_path" ]; then
+  fail 'allowlist query missing EXEC path'
+fi
+if [ "$_saw_profile" -ne 1 ] || [ -z "$_editor_profile" ]; then
+  fail 'allowlist query missing PROFILE'
+fi
+[ "$_editor_exec_path" = "$_editor_req" ] \
+  || fail 'allowlist query returned mismatched EXEC path'
+
+_is_abs_path "$_editor_exec_path" \
+  || fail "editor path must be absolute: $_editor_exec_path"
+_check_allowlist_meta "$_editor_exec_path" \
+  || fail "editor path must be root-owned, not group/other-writable: $_editor_exec_path"
+
+_resolve_editor "$_editor_profile" \
+  || fail "unknown editor profile '$_editor_profile' (supported: vim, nano, red; aliases: vi=vim)"
+
+if [ -n "$_runtime_tag" ]; then
+  case "$_runtime_tag" in
+    vim)
+      _check_vim "$_editor_exec_path" \
+        || fail "editor runtime check failed for $_editor_profile ($_editor_exec_path)"
+      ;;
+    *)
+      fail "internal: unknown runtime check $_runtime_tag"
+      ;;
+  esac
+fi
+
+if [ -n "$_config_file" ]; then
+  _config_abs="${_BROKER_CONFIG_DIR%/}/$_config_file"
+  [ -n "$_config_metadata" ] \
+    || fail 'broker missing baked metadata for shipped config (vim profile; rebuild required)'
+  _check_file_meta "$_config_abs" "$_config_metadata" \
+    || fail "editor config metadata mismatch: $_config_abs"
+  _editor_flags=$(_expand_config "$_editor_flags" "$_config_abs")
+fi
+
+# ---- Optional pre-digest check -----------------------------------------------------------
+
+if [ "$_pre_digest" != '-' ]; then
+  _pre_now="$(_digest_hex64 "$_tmpfile" 2>/dev/null || true)"
+  if [ -n "$_pre_now" ]; then
+    [ "$_pre_now" = "$_pre_digest" ] || fail 'PRE_DIGEST mismatch'
+  else
+    # Tool unavailable => treat like capture failure (recoverable).
+    # This matches the sentinel semantics on the legacy shim path.
+    printf 'broker: PRE_DIGEST capture failure (checksum tool unavailable)\n' >&2
+  fi
+fi
+
+# ---- Run editor with TTY on stdio (subprocess, not POSIX exec) ---------------------------
+#
+# env -i: editor must not inherit doas/broker environment (e.g. VIMINIT,
+# EXINIT). Baseline HOME/SHELL, sanitized TERM, then registry template argv.
+# sanitized TERM. Remaining argv comes from the internal registry template.
+
+set -- "HOME=$_EDIT_BROKER_EDITOR_HOME" "SHELL=$_EDIT_BROKER_EDITOR_SHELL"
+set -- "$@" "TERM=$(_sanitize_term)" "$_editor_exec_path"
+# Unquoted split is safe here: template tokens are shipped in broker source.
+set -f
+for _tok in $_editor_flags; do
+  set -- "$@" "$_tok"
+done
+set +f
+set -- "$@" "$_tmpfile"
+
+# Call editor bundle (env baseline, editor path, registry template tokens, tmpfile).
+/usr/bin/env -i "$@" <&3 1>&4 2>&4
+_edit_rc=$?
+
+# Close TTY fds before response phase so awk/checksum subshells do not inherit
+# them; response uses stdout (fd 1) only.
+exec 3<&- 4>&-
+
+if [ "$_edit_rc" -ne 0 ]; then
+  # Interactive editor failed: protocol error.
+  printf 'RESP_CODE=1\n'
+  printf 'broker: editor exited with status %s\n' "$_edit_rc" >&2
+  exit 0
+fi
+
+# ---- Response framing (success) ----------------------------------------------------------
+
+_out_len=$(_wc_bytes "$_tmpfile")
+# Some wc implementations pad output with leading whitespace; awk trims it.
+_is_decimal "$_out_len" || fail 'OUT_LEN not decimal'
+[ "$_out_len" -le "$_MAX_BROKER_BYTES" ] 2>/dev/null || fail 'OUT_LEN exceeds MAX_BROKER_BYTES'
+
+_post_digest="$(_digest_hex64 "$_tmpfile" 2>/dev/null || true)"
+if [ -z "$_post_digest" ]; then
+  _post_digest='-'
+fi
+
+printf 'RESP_CODE=0\n'
+printf 'POST_DIGEST=%s\n' "$_post_digest"
+printf 'OUT_LEN=%s\n' "$_out_len"
+
+# NUL-safe body: exactly OUT_LEN bytes.
+_write_exact "$_tmpfile" "$_out_len"
+exit 0

@@ -1,0 +1,58 @@
+# BSD integration tests via QEMU on ubuntu-latest (vmactions). See tests/README.md.
+# Trigger: GitHub Actions UI, "Run workflow" on this workflow.
+
+name: doas-sudo-shim CI (BSD)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  vmactions-bsd:
+    name: vmactions ${{ matrix.name }} (gmake)
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: FreeBSD,       release: "15.0"  }
+          - { name: OpenBSD,       release: "7.8"   }
+          - { name: NetBSD,        release: "10.1"  }
+          - { name: DragonFly BSD, release: "6.4.2" }
+
+    env:
+      PREPARE_SCRIPT: |
+        set -eu
+        export BSD_USER=runner BSD_WORKDIR="$GITHUB_WORKSPACE"
+        sh "$GITHUB_WORKSPACE/tests/bsd/runner.sh" prepare
+      RUN_SCRIPT: |
+        set -eu
+        export BSD_USER=runner BSD_WORKDIR="$GITHUB_WORKSPACE"
+        sh "$GITHUB_WORKSPACE/tests/bsd/runner.sh" test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tests in FreeBSD
+        if: matrix.name == 'FreeBSD'
+        uses: vmactions/freebsd-vm@v1.4.5
+        with: &vm-config
+          usesh: true
+          release: ${{ matrix.release }}
+          prepare: ${{ env.PREPARE_SCRIPT }}
+          run: ${{ env.RUN_SCRIPT }}
+
+      - name: Tests in OpenBSD
+        if: matrix.name == 'OpenBSD'
+        uses: vmactions/openbsd-vm@v1.4.0
+        with: *vm-config
+
+      - name: Tests in NetBSD
+        if: matrix.name == 'NetBSD'
+        uses: vmactions/netbsd-vm@v1.3.8
+        with: *vm-config
+
+      - name: Tests in DragonFly BSD
+        if: matrix.name == 'DragonFly BSD'
+        uses: vmactions/dragonflybsd-vm@v1.2.8
+        with: *vm-config

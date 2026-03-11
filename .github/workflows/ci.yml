@@ -1,0 +1,160 @@
+name: doas-sudo-shim CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  shellcheck:
+    name: ShellCheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ShellCheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Run ShellCheck
+        run: make shellcheck
+
+  native-check:
+    name: Native ${{ matrix.make_bin }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            make_bin: make
+          - os: macos-latest
+            make_bin: gmake
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned copy of https://github.com/GiovanniBussi/macports-ci
+      - name: Checkout macports-ci (pinned)
+        if: runner.os == 'macOS'
+        uses: actions/checkout@v4
+        with:
+          repository: GiovanniBussi/macports-ci
+          ref: 7e72ecdc52a15803c199ec11667b7a9e21695f7b
+          path: vendor/macports-ci
+
+      # macOS only: run macports-ci install (binary pkg + selfupdate). Adds /opt/local/bin to GITHUB_PATH.
+      - name: Bootstrap MacPorts (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -e
+          chmod +x vendor/macports-ci/macports-ci
+          source ./vendor/macports-ci/macports-ci install
+          echo "/opt/local/bin" >> "$GITHUB_PATH"
+          echo "/opt/local/sbin" >> "$GITHUB_PATH"
+
+      - name: Install dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          set -eu
+          sudo apt-get update
+          sudo apt-get install -y socat doas
+          printf '%s\n' 'permit nopass runner' | sudo tee /etc/doas.conf >/dev/null
+          sudo chmod 600 /etc/doas.conf
+
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          set -eu
+          sudo port -N install doas socat gmake
+          sudo chmod 4755 /opt/local/bin/doas 2>/dev/null || true
+          if [ -r /etc/pam.d/sudo ] && [ ! -e /etc/pam.d/doas ]; then
+            sudo cp /etc/pam.d/sudo /etc/pam.d/doas
+          fi
+          printf '%s\n' 'permit nopass runner' | sudo tee /opt/local/etc/doas.conf >/dev/null
+          sudo chmod 600 /opt/local/etc/doas.conf
+
+      - name: Run tests (${{ matrix.make_bin }})
+        run: ${{ matrix.make_bin }}
+
+      - name: Setup tmate session
+        if: ${{ failure() }}
+        uses: mxschmitt/action-tmate@v3
+
+  docker-test:
+    name: Docker ${{ matrix.name }} (testuser check + doas install in image)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Alpine
+            dockerfile: tests/docker/Alpine.Dockerfile
+            tag: sudo-shim-alpine
+            make_bin: make
+            broker_env_prolog: ':'
+          - name: Chimera
+            dockerfile: tests/docker/Chimera.Dockerfile
+            tag: sudo-shim-chimera
+            make_bin: gmake
+            broker_env_prolog: export MAKE=gmake
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image (RUN probes Makefile targets)
+        run: docker build -f ${{ matrix.dockerfile }} -t ${{ matrix.tag }} .
+
+      - name: Smoke installed shim (--version)
+        run: docker run --rm ${{ matrix.tag }} sh -c 'PATH=/usr/local/bin:/usr/bin:/bin exec sudo -V'
+
+      - name: Smoke broker doas rule (editbroker hop)
+        run: |
+          docker run --rm ${{ matrix.tag }} sh -c '
+            set -e
+            PATH=/usr/local/bin:/usr/bin:/bin
+            resp=$(printf "MAGIC=WRONG\n" | doas -n -u editbroker -- /usr/local/libexec/doas-sudo-shim/edit-broker 2>/dev/null | head -n 1) || true
+            test "$resp" = RESP_CODE=1
+          '
+
+      - name: Broker E2E (broker-e2e_test.sh)
+        run: |
+          docker run --rm -u 0 -w /src ${{ matrix.tag }} sh -c '
+            set -e
+            PATH=/usr/local/bin:/usr/bin:/bin
+            ${{ matrix.broker_env_prolog }}
+            OVERWRITE_SYMLINKS=1 BROKER_E2E_SKIP_BUILD=1 ${{ matrix.make_bin }} broker-e2e-setup BROKER_E2E_APPEND_DOAS_CONF=1
+            su -s /bin/sh testuser -c "cd /src && env EDIT_BROKER_PATH=/usr/local/libexec/doas-sudo-shim/edit-broker SHIM=sudo BROKER_E2E_EDITOR=/usr/local/libexec/doas-sudo-shim/e2e-append-editor.sh ALLOWLIST_PATH=/etc/doas-sudo-shim/edit-broker.editors BROKER_E2E_TARGET=/usr/local/share/doas-sudo-shim/broker-e2e-seed sh broker/tests/broker-e2e_test.sh"
+          '
+
+  docker-uninstall:
+    name: Docker ${{ matrix.name }} uninstall
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Alpine
+            dockerfile: tests/docker/Alpine.Dockerfile
+            tag: sudo-shim-alpine
+            make_bin: make
+          - name: Chimera
+            dockerfile: tests/docker/Chimera.Dockerfile
+            tag: sudo-shim-chimera
+            make_bin: gmake
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build test image
+        run: docker build -f ${{ matrix.dockerfile }} -t ${{ matrix.tag }} .
+
+      - name: ${{ matrix.make_bin }} uninstall as root (ephemeral overlay)
+        run: |
+          docker run --rm -u 0 -w /src ${{ matrix.tag }} sh -c '
+            set -e
+            ${{ matrix.make_bin }} uninstall &&
+            test ! -e /usr/local/bin/sudo &&
+            test ! -d /usr/local/libexec/doas-sudo-shim
+          '

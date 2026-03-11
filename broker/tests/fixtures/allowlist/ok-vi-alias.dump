@@ -1,0 +1,3 @@
+STANZA vim
+EXEC /stub/p/vim-from-vi
+ENDSTANZA

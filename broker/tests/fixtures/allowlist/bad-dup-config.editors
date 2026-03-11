@@ -1,0 +1,4 @@
+[vim]
+path = /usr/bin/vim
+config = /etc/passwd
+config = /etc/group
