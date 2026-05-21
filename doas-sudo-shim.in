@@ -1703,7 +1703,7 @@ if [ "${flag_e:-}" ]; then
       _fail() { exec 5>&- 2>/dev/null; "$_rm" -f -- "$_wb" 2>/dev/null; exit 1; }
 
       _st() { "$_stat" "$_stflg" "%d:%i" "$1" 2>/dev/null; }
-      _stfd() { "$_stat" -L "$_stflg" "$_stfmt" "$1" 2>/dev/null || printf '%s' '-'; }
+      _stfd() { "$_stat" -L "$_stflg" "$_stfmt" "$1" 2>/dev/null || printf "%s" "-"; }
 
       _check_path() { [ ! -h "$1" ] && [ "$(_st "$1")" = "$_ref" ] || _fail; }
 

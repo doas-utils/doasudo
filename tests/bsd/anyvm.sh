@@ -128,6 +128,7 @@ _run_os() {
     set --
   fi
 
+  # shellcheck disable=SC2086
   set -- "$@" docker run --rm $_docker_args $_kvm \
     -e "ANYVM_HOST_UID=${_uid}" \
     -e "ANYVM_HOST_GID=${_gid}" \
