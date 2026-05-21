@@ -300,11 +300,11 @@ _get_passwd_field() {
 
   _gpf_entry=
   [ -n "$_GETENT" ] && {
-    _gpf_entry=$(LC_ALL=C "$_GETENT" passwd "$_gpf_u" 2>/dev/null) || _gpf_entry=
+    _gpf_entry=$(LC_ALL=C "$_GETENT" passwd -- "$_gpf_u" 2>/dev/null) || _gpf_entry=
   }
   [ -z "$_gpf_entry" ] && [ -n "${_ID:-}" ] && {
     _gpf_aux="NR==1 && NF==10 { printf \"%s:%s:%s:%s:%s:%s:%s\", \$1,\$2,\$3,\$4,\$8,\$9,\$10 }"
-    _gpf_entry=$(LC_ALL=C "$_ID" -P "$_gpf_u" 2>/dev/null | "$_AWK" -F: "$_gpf_aux")
+    _gpf_entry=$(LC_ALL=C "$_ID" -P -- "$_gpf_u" 2>/dev/null | "$_AWK" -F: "$_gpf_aux")
   }
   [ -z "$_gpf_entry" ] && {
     _gpf_aux="BEGIN{u=ENVIRON[\"u\"]} \$1==u {print; exit}"
