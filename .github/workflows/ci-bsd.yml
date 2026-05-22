@@ -23,11 +23,11 @@ jobs:
     env:
       PREPARE_SCRIPT: |
         set -eu
-        export BSD_USER=runner BSD_WORKDIR="$GITHUB_WORKSPACE"
+        export BSD_USER=user BSD_WORKDIR="$GITHUB_WORKSPACE"
         sh "$GITHUB_WORKSPACE/tests/bsd/runner.sh" prepare
       RUN_SCRIPT: |
         set -eu
-        export BSD_USER=runner BSD_WORKDIR="$GITHUB_WORKSPACE"
+        export BSD_USER=user BSD_WORKDIR="$GITHUB_WORKSPACE"
         sh "$GITHUB_WORKSPACE/tests/bsd/runner.sh" test
 
     steps:
