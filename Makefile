@@ -20,7 +20,7 @@
 # `make post-install` / `sh packaging/post-install.sh` (packager %post, manual rerun).
 #
 # Broker E2E: doas make broker-e2e-setup (`make check` unless BROKER_E2E_SKIP_BUILD=1, e.g. after
-#   Docker image `make check`); then make check-broker-e2e BROKER_E2E_RUN_USER=testuser.
+#   Docker image `make check`); then make check-broker-e2e BROKER_E2E_RUN_USER=user.
 #
 # Installs $(DESTDIR)$(BINDIR)/sudo; sudoedit and editas symlink to it.
 # Uninstall: `make uninstall` removes the same layout as `make install` (including policy files).
@@ -315,7 +315,7 @@ post-install:
 # Then check-broker-e2e as a non-root user permitted by DOAS_PERMIT_IDENTITY.
 #   sudo make broker-e2e-setup
 #   sudo make broker-e2e-setup BROKER_E2E_APPEND_DOAS_CONF=1
-#   make check-broker-e2e BROKER_E2E_RUN_USER=testuser
+#   make check-broker-e2e BROKER_E2E_RUN_USER=user
 .PHONY: broker-e2e-setup
 broker-e2e-setup:
   @if [ -n "$(DESTDIR)" ]; then \

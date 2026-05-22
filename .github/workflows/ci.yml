@@ -83,7 +83,7 @@ jobs:
         uses: mxschmitt/action-tmate@v3
 
   docker-test:
-    name: Docker ${{ matrix.name }} (testuser check + doas install in image)
+    name: Docker ${{ matrix.name }} (user check + doas install in image)
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -93,12 +93,10 @@ jobs:
             dockerfile: tests/docker/Alpine.Dockerfile
             tag: sudo-shim-alpine
             make_bin: make
-            broker_env_prolog: ':'
           - name: Chimera
             dockerfile: tests/docker/Chimera.Dockerfile
             tag: sudo-shim-chimera
             make_bin: gmake
-            broker_env_prolog: export MAKE=gmake
 
     steps:
       - uses: actions/checkout@v4
@@ -111,22 +109,23 @@ jobs:
 
       - name: Smoke broker doas rule (editbroker hop)
         run: |
-          docker run --rm ${{ matrix.tag }} sh -c '
-            set -e
-            PATH=/usr/local/bin:/usr/bin:/bin
-            resp=$(printf "MAGIC=WRONG\n" | doas -n -u editbroker -- /usr/local/libexec/doas-sudo-shim/edit-broker 2>/dev/null | head -n 1) || true
-            test "$resp" = RESP_CODE=1
-          '
+          scr="set -eu;"
+          scr="$scr PATH=/usr/local/bin:/usr/bin:/bin;"
+          scr="$scr BROKER=/usr/local/libexec/doas-sudo-shim/edit-broker;"
+          scr="$scr resp=\$(printf 'MAGIC=WRONG\n' | doas -n -u editbroker -- \$BROKER 2>/dev/null | head -n 1) || true;"
+          scr="$scr test \$resp = 'RESP_CODE=1' && echo 'PASS: doas -u editbroker'"
+
+          docker run --rm ${{ matrix.tag }} sh -c "$scr"
 
       - name: Broker E2E (broker-e2e_test.sh)
         run: |
-          docker run --rm -u 0 -w /src ${{ matrix.tag }} sh -c '
-            set -e
-            PATH=/usr/local/bin:/usr/bin:/bin
-            ${{ matrix.broker_env_prolog }}
-            OVERWRITE_SYMLINKS=1 BROKER_E2E_SKIP_BUILD=1 ${{ matrix.make_bin }} broker-e2e-setup BROKER_E2E_APPEND_DOAS_CONF=1
-            su -s /bin/sh testuser -c "cd /src && env EDIT_BROKER_PATH=/usr/local/libexec/doas-sudo-shim/edit-broker SHIM=sudo BROKER_E2E_EDITOR=/usr/local/libexec/doas-sudo-shim/e2e-append-editor.sh ALLOWLIST_PATH=/etc/doas-sudo-shim/edit-broker.editors BROKER_E2E_TARGET=/usr/local/share/doas-sudo-shim/broker-e2e-seed sh broker/tests/broker-e2e_test.sh"
-          '
+          scr="set -eu;"
+          scr="$scr PATH=/usr/local/bin:/usr/bin:/bin;"
+          scr="$scr OVERWRITE_SYMLINKS=1 BROKER_E2E_SKIP_BUILD=1 BROKER_E2E_APPEND_DOAS_CONF=1"
+          scr="$scr ${{ matrix.make_bin }} broker-e2e-setup"
+          scr="$scr && su -s /bin/sh user -c 'cd /src && exec ${{ matrix.make_bin }} check-broker-e2e'"
+
+          docker run --rm -u 0 -w /src ${{ matrix.tag }} sh -c "$scr"
 
   docker-uninstall:
     name: Docker ${{ matrix.name }} uninstall
