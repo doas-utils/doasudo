@@ -59,7 +59,7 @@ jobs:
         run: |
           set -eu
           sudo apt-get update
-          sudo apt-get install -y socat doas
+          sudo apt-get install -y doas socat
           printf '%s\n' 'permit nopass runner' | sudo tee /etc/doas.conf >/dev/null
           sudo chmod 600 /etc/doas.conf
 
@@ -67,7 +67,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           set -eu
-          sudo port -N install doas socat gmake
+          sudo port -N install doas gmake shellcheck socat
           sudo chmod 4755 /opt/local/bin/doas 2>/dev/null || true
           if [ -r /etc/pam.d/sudo ] && [ ! -e /etc/pam.d/doas ]; then
             sudo cp /etc/pam.d/sudo /etc/pam.d/doas
