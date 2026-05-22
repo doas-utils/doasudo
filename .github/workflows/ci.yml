@@ -79,10 +79,6 @@ jobs:
       - name: Run tests (${{ matrix.make_bin }})
         run: ${{ matrix.make_bin }} check-all
 
-      - name: Setup tmate session
-        if: ${{ failure() }}
-        uses: mxschmitt/action-tmate@v3
-
   docker-test:
     name: Docker ${{ matrix.name }} (user check + doas install in image)
     runs-on: ubuntu-latest
