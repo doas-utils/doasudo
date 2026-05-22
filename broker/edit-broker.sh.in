@@ -322,7 +322,7 @@ _session_lock="${_EDIT_BROKER_STAGING_DIR}/.edit-broker-lock-${_tty_slug}"
 _acquire_session_lock "$_session_lock" \
   || fail "TTY session lock busy (another edit is active on ${_real_tty})"
 
-# shellcheck disable=SC2317
+# shellcheck disable=SC2317,SC2329
 _broker_exit_cleanup() {
   # EXIT may run with noglob still enabled (e.g. signal during the flags loop).
   set +f

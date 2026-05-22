@@ -77,7 +77,7 @@ jobs:
           sudo ln -sf /bin/dash /var/select/sh
 
       - name: Run tests (${{ matrix.make_bin }})
-        run: ${{ matrix.make_bin }}
+        run: ${{ matrix.make_bin }} check-all
 
       - name: Setup tmate session
         if: ${{ failure() }}

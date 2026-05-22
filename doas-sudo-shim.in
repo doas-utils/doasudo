@@ -1199,7 +1199,7 @@ if [ "${flag_e:-}" ]; then
   #   A root-owned _wbtmp may remain on disk and must be removed by an
   #   administrator. SIGKILL cannot be trapped, so this gap is irreducible.
 
-  # shellcheck disable=SC2317
+  # shellcheck disable=SC2317,SC2329
   _edit_mode_exit_cleanup() {
     if [ -n "${_active_wbtmp:-}" ] && [ -e "$_active_wbtmp" ]; then
       printf "%s: write-back interrupted; temporary file left behind: '%s'; please remove it manually\n" \
