@@ -74,6 +74,7 @@ jobs:
           fi
           printf '%s\n' 'permit nopass runner' | sudo tee /opt/local/etc/doas.conf >/dev/null
           sudo chmod 600 /opt/local/etc/doas.conf
+          sudo ln -sf /bin/dash /var/select/sh
 
       - name: Run tests (${{ matrix.make_bin }})
         run: ${{ matrix.make_bin }}
