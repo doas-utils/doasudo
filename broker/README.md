@@ -1,6 +1,6 @@
 # Edit broker
 
-The default edit mode in doas-sudo-shim (`sudo -e`, `sudoedit`, `editas`) stages each file under the invoking user, then writes back as the privileged user. The shim hardens the pre- and post-editor windows; the working copy still lives on the invoker's side of the boundary until write-back. Same-UID exposure surface is acknowledged in the top-level README under [Optional edit-mode broker](../README.md#optional-paranoid-edit-mode-broker).
+The default edit mode in doasudo (`sudo -e`, `sudoedit`, `editas`) stages each file under the invoking user, then writes back as the privileged user. The shim hardens the pre- and post-editor windows; the working copy still lives on the invoker's side of the boundary until write-back. Same-UID exposure surface is acknowledged in the top-level README under [Optional edit-mode broker](../README.md#optional-paranoid-edit-mode-broker).
 
 Edit broker is optional. When it is on, the shim runs a small editor wrapper as a *dedicated user* via `doas`; that user owns the staged bytes. The wrapper speaks `EDITBROKER/1` on stdin/stdout ([Broker IPC Spec.md](Broker%20IPC%20Spec.md)). It starts only binaries whose paths appear under `path =` in the allowlist; `argv`, the `env -i` baseline, and shipped config come from the broker registry ([Editor Allowlist Spec.md](Editor%20Allowlist%20Spec.md)). Write-back follows the legacy privileged path; content returns from broker staging. Broker mode stays off until `SUDO_SHIM_EDIT_BROKER=1`, a broker install path, and `doas.conf` rules all line up; otherwise the shim follows the legacy path in the top-level README.
 
@@ -23,7 +23,7 @@ The shim starts the broker with `doas -u <EDIT_BROKER_USER> -- <edit-broker>`, s
 
 ## Security model
 
-The shipped broker (`edit-broker.sh` from `edit-broker.sh.in`) documents policy in the `SECURITY NOTE` at the top of `edit-broker.sh.in`, as `doas-sudo-shim.in` does for default edit mode. This README does not cover site wrappers, alternate binaries, or extra OS hardening (pledge, Landlock, and the like).
+The shipped broker (`edit-broker.sh` from `edit-broker.sh.in`) documents policy in the `SECURITY NOTE` at the top of `edit-broker.sh.in`, as `doasudo.in` does for default edit mode. This README does not cover site wrappers, alternate binaries, or extra OS hardening (pledge, Landlock, and the like).
 
 [Optional edit-mode broker](../README.md#optional-paranoid-edit-mode-broker) explains the same-UID residual risk in default edit mode. Broker mode runs staging and the editor as a *dedicated user*. The wire carries `EDITOR=` as a path into a root-owned allowlist (`path =` lines). `argv`, environment, and shipped-config templates come from the broker registry, not from the client or from extra allowlist fields. See [Broker IPC Spec.md](Broker%20IPC%20Spec.md) and [Editor Allowlist Spec.md](Editor%20Allowlist%20Spec.md).
 
@@ -68,6 +68,6 @@ Baked metadata uses `sha256:0:0:<mode>`; `stat(1)` at runtime must match (`755` 
 
 Security narrative: comment block at top of `edit-broker.sh.in` (installed `edit-broker.sh`).
 
-The Makefile generates `edit-broker.sh` from `edit-broker.sh.in` (see the Makefile and comments there). `allowlist-parse.awk` parses the allowlist; `tests/` holds contract fixtures, `test-driver.sh`, and E2E helpers. Broker wiring lives in `doas-sudo-shim.in` (broker branch); shared helpers in `lib/shim-utils.sh.in`; shim-side broker client in `lib/edit-broker-client.sh.in`.
+The Makefile generates `edit-broker.sh` from `edit-broker.sh.in` (see the Makefile and comments there). `allowlist-parse.awk` parses the allowlist; `tests/` holds contract fixtures, `test-driver.sh`, and E2E helpers. Broker wiring lives in `doasudo.in` (broker branch); shared helpers in `lib/shim-utils.sh.in`; shim-side broker client in `lib/edit-broker-client.sh.in`.
 
 Install layout, `config/`, and `post-install`: [packaging/README.md](../packaging/README.md). `check-src`, Docker, and host `broker-e2e`: [tests/README.md](../tests/README.md).

@@ -1,7 +1,7 @@
 # BSD integration tests via QEMU on ubuntu-latest (vmactions). See tests/README.md.
 # Trigger: GitHub Actions UI, "Run workflow" on this workflow.
 
-name: doas-sudo-shim CI (BSD)
+name: doasudo CI (BSD)
 
 on:
   workflow_dispatch:

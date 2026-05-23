@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SPDX-License-Identifier: MIT
-# See LICENSE.md. Part of doas-utils/doas-sudo-shim.
+# See LICENSE.md. Part of doas-utils/doasudo.
 #
 # Root-only setup for broker e2e: `make` (unless BROKER_E2E_SKIP_BUILD=1),
 # `make install` (live install folds post-install), shim links, e2e editor,
@@ -24,8 +24,8 @@ set -eu
 
 : "${PREFIX:=/usr/local}"
 : "${BINDIR:=${PREFIX}/bin}"
-: "${EDIT_BROKER_PATH:=${PREFIX}/libexec/doas-sudo-shim/edit-broker}"
-: "${DOAS_SNIPPET_DIR:=/etc/doas-sudo-shim}"
+: "${EDIT_BROKER_PATH:=${PREFIX}/libexec/doasudo/edit-broker}"
+: "${DOAS_SNIPPET_DIR:=/etc/doasudo}"
 : "${BROKER_E2E_APPEND_DOAS_CONF:=0}"
 : "${BROKER_E2E_SKIP_BUILD:=0}"
 
@@ -35,7 +35,7 @@ _make="${MAKE:-make}"
 
 _install_shim_links() {
 	install -d "${BINDIR}"
-	install -m 755 doas-sudo-shim "${BINDIR}/sudo"
+	install -m 755 doasudo "${BINDIR}/sudo"
 	ln -sf sudo "${BINDIR}/sudoedit"
 	ln -sf sudo "${BINDIR}/editas"
 }
@@ -46,7 +46,7 @@ fi
 "${_make}" install
 _install_shim_links
 
-_e2e_editor="${PREFIX}/libexec/doas-sudo-shim/e2e-append-editor.sh"
+_e2e_editor="${PREFIX}/libexec/doasudo/e2e-append-editor.sh"
 install -d "$(dirname -- "$_e2e_editor")"
 install -m 755 "$_repo/broker/tests/e2e-append-editor.sh" "$_e2e_editor"
 
@@ -59,8 +59,8 @@ install -d "$DOAS_SNIPPET_DIR"
 } >"$_allow"
 chmod 644 "$_allow"
 
-_e2e_seed="${PREFIX}/share/doas-sudo-shim/broker-e2e-seed"
-install -d "${PREFIX}/share/doas-sudo-shim"
+_e2e_seed="${PREFIX}/share/doasudo/broker-e2e-seed"
+install -d "${PREFIX}/share/doasudo"
 umask 022
 printf 'seed\n' > "$_e2e_seed"
 chown 0:0 "$_e2e_seed"
@@ -82,7 +82,7 @@ if [ "$BROKER_E2E_APPEND_DOAS_CONF" = "1" ]; then
 			esac
 			if ! grep -qF "$_line" /etc/doas.conf 2>/dev/null; then
 				if [ "$_added" -eq 0 ]; then
-					printf '\n# doas-sudo-shim broker E2E\n' >> /etc/doas.conf
+					printf '\n# doasudo broker E2E\n' >> /etc/doas.conf
 					_added=1
 				fi
 				printf '%s\n' "$_line" >> /etc/doas.conf

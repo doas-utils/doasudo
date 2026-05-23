@@ -1,4 +1,4 @@
-name: doas-sudo-shim CI
+name: doasudo CI
 
 on:
   push:
@@ -88,11 +88,11 @@ jobs:
         include:
           - name: Alpine
             dockerfile: tests/docker/Alpine.Dockerfile
-            tag: sudo-shim-alpine
+            tag: doasudo-alpine
             make_bin: make
           - name: Chimera
             dockerfile: tests/docker/Chimera.Dockerfile
-            tag: sudo-shim-chimera
+            tag: doasudo-chimera
             make_bin: gmake
 
     steps:
@@ -108,7 +108,7 @@ jobs:
         run: |
           scr="set -eu;"
           scr="$scr PATH=/usr/local/bin:/usr/bin:/bin;"
-          scr="$scr BROKER=/usr/local/libexec/doas-sudo-shim/edit-broker;"
+          scr="$scr BROKER=/usr/local/libexec/doasudo/edit-broker;"
           scr="$scr resp=\$(printf 'MAGIC=WRONG\n' | doas -n -u editbroker -- \$BROKER 2>/dev/null | head -n 1) || true;"
           scr="$scr test \$resp = 'RESP_CODE=1' && echo 'PASS: doas -u editbroker'"
 
@@ -133,11 +133,11 @@ jobs:
         include:
           - name: Alpine
             dockerfile: tests/docker/Alpine.Dockerfile
-            tag: sudo-shim-alpine
+            tag: doasudo-alpine
             make_bin: make
           - name: Chimera
             dockerfile: tests/docker/Chimera.Dockerfile
-            tag: sudo-shim-chimera
+            tag: doasudo-chimera
             make_bin: gmake
 
     steps:
@@ -152,5 +152,5 @@ jobs:
             set -e
             ${{ matrix.make_bin }} uninstall &&
             test ! -e /usr/local/bin/sudo &&
-            test ! -d /usr/local/libexec/doas-sudo-shim
+            test ! -d /usr/local/libexec/doasudo
           '

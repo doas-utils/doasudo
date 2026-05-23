@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SPDX-License-Identifier: MIT
-# See LICENSE.md. Part of doas-utils/doas-sudo-shim.
+# See LICENSE.md. Part of doas-utils/doasudo.
 #
 # Validates that the execution path (`_doas_exec`) and the write-back path
 # (`_doas`) emit identical `doas` flags across all valid option combinations.
@@ -16,8 +16,8 @@
 # - Parity: Asserts both paths produce identical flags for identical inputs.
 #
 # Usage:
-#   sh doas-flags-parity_test.sh [path/to/doas-sudo-shim.in]     # source mode (default)
-#   sh doas-flags-parity_test.sh --built path/to/doas-sudo-shim  # built mode
+#   sh doas-flags-parity_test.sh [path/to/doasudo.in]     # source mode (default)
+#   sh doas-flags-parity_test.sh --built path/to/doasudo  # built mode
 #
 # Constraints:
 # - Built mode requires a real `doas`; skips fixtures that need compilation.
@@ -44,7 +44,7 @@ case "${1:-}" in
     _built=1
     ;;
   *)
-    _shim_src="${1:-${_repo_root}/doas-sudo-shim.in}"
+    _shim_src="${1:-${_repo_root}/doasudo.in}"
     [ -f "$_shim_src" ] || { printf 'error: shim source not found: %s\n' "$_shim_src" >&2; exit 1; }
     ;;
 esac

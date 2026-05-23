@@ -3,12 +3,12 @@
 # Resolved paths + globals from sourced testlib helpers.
 
 # SPDX-License-Identifier: MIT
-# See LICENSE.md. Part of doas-utils/doas-sudo-shim.
+# See LICENSE.md. Part of doas-utils/doasudo.
 #
 # Shim baked with SUDO_SHIM_EDIT_BROKER + mock EDITBROKER IPC (moved from edit-mode_test).
 #
 # Usage:
-#   sh broker/tests/broker-integration_test.sh [path/to/doas-sudo-shim.in]
+#   sh broker/tests/broker-integration_test.sh [path/to/doasudo.in]
 
 set -eu
 
@@ -19,7 +19,7 @@ _skip=0
 _here=$(CDPATH="" cd -P -- "$(dirname -- "$0")" && pwd)
 _repo_root=$(CDPATH="" cd -P -- "$_here/../.." && pwd)
 _tests_dir="$_repo_root/tests"
-_shim_src="${1:-${_tests_dir}/doas-sudo-shim.in}"
+_shim_src="${1:-${_tests_dir}/doasudo.in}"
 [ -f "$_shim_src" ] || {
   printf 'error: shim source not found: %s\n' "$_shim_src" >&2
   exit 1

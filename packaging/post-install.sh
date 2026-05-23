@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SPDX-License-Identifier: MIT
-# See LICENSE.md. Part of doas-utils/doas-sudo-shim.
+# See LICENSE.md. Part of doas-utils/doasudo.
 #
 # Creates a dedicated unprivileged broker user and initializes the restricted
 # staging directory with 0700 permissions.
@@ -13,15 +13,15 @@
 # Configuration variables (defaults match the Makefile):
 # - DRY_RUN=1:                Prints actions without modifying the system.
 # - EDIT_BROKER_USER:         Dedicated user for the broker (default: editbroker).
-# - EDIT_BROKER_STAGING_DIR:  Broker scratch space (default: /var/lib/doas-sudo-shim/editbroker).
-# - DOAS_SNIPPET_DIR:         Directory for doas rules (default: /etc/doas-sudo-shim).
+# - EDIT_BROKER_STAGING_DIR:  Broker scratch space (default: /var/lib/doasudo/editbroker).
+# - DOAS_SNIPPET_DIR:         Directory for doas rules (default: /etc/doasudo).
 
 set -eu
 
 : "${DRY_RUN:=0}"
 : "${EDIT_BROKER_USER:=editbroker}"
-: "${EDIT_BROKER_STAGING_DIR:=/var/lib/doas-sudo-shim/editbroker}"
-: "${DOAS_SNIPPET_DIR:=/etc/doas-sudo-shim}"
+: "${EDIT_BROKER_STAGING_DIR:=/var/lib/doasudo/editbroker}"
+: "${DOAS_SNIPPET_DIR:=/etc/doasudo}"
 
 snippet="${DOAS_SNIPPET_DIR}/doas-snippet.conf"
 
@@ -52,7 +52,7 @@ _create_editbroker_user() {
   case "$os" in
     Linux)
       if command -v useradd >/dev/null 2>&1; then
-        useradd -r -s /sbin/nologin -d /nonexistent -c 'doas-sudo-shim edit broker' "$u"
+        useradd -r -s /sbin/nologin -d /nonexistent -c 'doasudo edit broker' "$u"
       elif command -v adduser >/dev/null 2>&1; then
         adduser -D -H -h /nonexistent -s /sbin/nologin "$u"
       else
@@ -62,11 +62,11 @@ _create_editbroker_user() {
       ;;
     FreeBSD|DragonFly)
       pw useradd "$u" -n "$u" -N -s /usr/sbin/nologin -d /nonexistent \
-        -c 'doas-sudo-shim edit broker'
+        -c 'doasudo edit broker'
       ;;
     OpenBSD|NetBSD)
       if command -v useradd >/dev/null 2>&1; then
-        useradd -s /sbin/nologin -d /nonexistent -c 'doas-sudo-shim edit broker' "$u"
+        useradd -s /sbin/nologin -d /nonexistent -c 'doasudo edit broker' "$u"
       else
         printf 'error: user creation failed; create system user %s manually\n' "$u" >&2
         return 1
@@ -80,7 +80,7 @@ _create_editbroker_user() {
       ;;
     *)
       if command -v useradd >/dev/null 2>&1; then
-        useradd -r -s /usr/sbin/nologin -d /nonexistent -c 'doas-sudo-shim edit broker' "$u" || {
+        useradd -r -s /usr/sbin/nologin -d /nonexistent -c 'doasudo edit broker' "$u" || {
           printf 'error: user creation failed; create system user %s manually\n' "$u" >&2
           return 1
         }

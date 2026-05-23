@@ -1,5 +1,5 @@
 # SPDX-License-Identifier: MIT
-# See LICENSE.md. Part of doas-utils/doas-sudo-shim.
+# See LICENSE.md. Part of doas-utils/doasudo.
 #
 # Shared mockbin prelude for sudoedit harnesses. SOURCED, not executed.
 #

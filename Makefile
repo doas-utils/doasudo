@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
-# See LICENSE.md. Part of doas-utils/doas-sudo-shim.
+# See LICENSE.md. Part of doas-utils/doasudo.
 #
-# Makefile for doas-sudo-shim
+# Makefile for doasudo
 #
 # Install:
 #   make && doas make install         # test/build as normal user, privileged install
@@ -55,14 +55,14 @@ VERSION := $(shell cat VERSION)
 # there). Override for non-standard layouts (NixOS, pkgsrc, etc.).
 SHIM_PATH ?= $(BINDIR):$(SBINDIR):/usr/bin:/usr/sbin:/bin:/sbin
 # Installed helpers; broker sources shim-utils.sh too.
-SHIM_LIBEXEC_DIR ?= $(PREFIX)/libexec/doas-sudo-shim
+SHIM_LIBEXEC_DIR ?= $(PREFIX)/libexec/doasudo
 SHIM_UTILS ?= $(SHIM_LIBEXEC_DIR)/shim-utils.sh
 EDIT_BROKER_CLIENT ?= $(SHIM_LIBEXEC_DIR)/edit-broker-client.sh
 EDIT_BROKER_PATH ?= $(SHIM_LIBEXEC_DIR)/edit-broker
 EDIT_BROKER_CONTRACTS_PATH ?= $(SHIM_LIBEXEC_DIR)/edit-broker-contracts.env
 
 # Broker staging (one mktemp file per request; not TMPDIR).
-EDIT_BROKER_STAGING_DIR ?= /var/lib/doas-sudo-shim/editbroker
+EDIT_BROKER_STAGING_DIR ?= /var/lib/doasudo/editbroker
 # Editor stdio TTY (must be /dev/...). Baked into the edit broker
 # (/dev/tty default; tests use broker/build-to with EDIT_BROKER_TTY=/dev/null).
 EDIT_BROKER_TTY ?= /dev/tty
@@ -70,7 +70,7 @@ EDIT_BROKER_TTY ?= /dev/tty
 EDIT_BROKER_USER ?= editbroker
 DOAS_PERMIT_IDENTITY ?= :editas
 SYSCONFDIR ?= /etc
-DOAS_SNIPPET_DIR ?= $(SYSCONFDIR)/doas-sudo-shim
+DOAS_SNIPPET_DIR ?= $(SYSCONFDIR)/doasudo
 # Broker allowlist path (baked in; not read from the environment).
 BROKER_ALLOWLIST_PATH ?= $(DOAS_SNIPPET_DIR)/edit-broker.editors
 
@@ -106,7 +106,7 @@ BROKER_E2E_ENV := \
   SHIM="$(BINDIR)/sudo" \
   BROKER_E2E_EDITOR="$(SHIM_LIBEXEC_DIR)/e2e-append-editor.sh" \
   ALLOWLIST_PATH="$(DOAS_SNIPPET_DIR)/edit-broker.editors" \
-  BROKER_E2E_TARGET=$(PREFIX)/share/doas-sudo-shim/broker-e2e-seed
+  BROKER_E2E_TARGET=$(PREFIX)/share/doasudo/broker-e2e-seed
 
 # ---- Baked metadata ----------------------------------------------------------------------
 # EDIT_BROKER_METADATA / UTILS_METADATA: baked into the shim and broker. Format
@@ -192,7 +192,7 @@ lib/edit-broker-client.sh: lib/edit-broker-client.sh.in Makefile $(EDIT_BROKER_C
 #
 # Makefile is a prerequisite so SHIM_PATH (and other make-vars) edits rebuild
 # the binary; otherwise the target timestamp can look fresh while baked paths rot.
-doas-sudo-shim: doas-sudo-shim.in VERSION Makefile lib/shim-utils.sh lib/edit-broker-client.sh broker/edit-broker.sh
+doasudo: doasudo.in VERSION Makefile lib/shim-utils.sh lib/edit-broker-client.sh broker/edit-broker.sh
   sed \
     $(call _sed_entry,BINDIR,$(SHIM_PATH)) \
     $(call _sed_entry,EDIT_BROKER_PATH,$(EDIT_BROKER_PATH)) \
@@ -251,15 +251,15 @@ EDIT_BROKER_SRC ?= broker/edit-broker.sh
 EDIT_BROKER_CONTRACTS_SRC ?= config/edit-broker-contracts.env
 
 .PHONY: install
-install: doas-sudo-shim $(if $(subst broker/edit-broker.sh,,$(EDIT_BROKER_SRC)),,broker/edit-broker.sh)
+install: doasudo $(if $(subst broker/edit-broker.sh,,$(EDIT_BROKER_SRC)),,broker/edit-broker.sh)
   @( PATH="$(SHIM_PATH)"; command -v doas >/dev/null 2>&1 ) \
     || printf 'warning: doas not found in SHIM_PATH=%s\n' "$(SHIM_PATH)" >&2
   $(INSTALL) -d $(DESTDIR)$(SHIM_LIBEXEC_DIR)
   $(INSTALL) -m 644 lib/shim-utils.sh $(DESTDIR)$(SHIM_UTILS)
   $(INSTALL) -m 644 lib/edit-broker-client.sh $(DESTDIR)$(EDIT_BROKER_CLIENT)
   $(INSTALL) -d $(DESTDIR)$(BINDIR)
-  $(INSTALL) -m 755 doas-sudo-shim $(DESTDIR)$(BINDIR)/sudo
-  @cmp -s doas-sudo-shim $(DESTDIR)$(BINDIR)/sudo \
+  $(INSTALL) -m 755 doasudo $(DESTDIR)$(BINDIR)/sudo
+  @cmp -s doasudo $(DESTDIR)$(BINDIR)/sudo \
     || { printf 'error: installed binary differs from built binary\n' >&2; exit 1; }
   # Relative link target: sudo -> same dir's sudo (BINDIR).
   ln -s $(_LN_FLAGS) sudo $(DESTDIR)$(BINDIR)/sudoedit
@@ -277,7 +277,7 @@ install: doas-sudo-shim $(if $(subst broker/edit-broker.sh,,$(EDIT_BROKER_SRC)),
   chmod 0700 $(DESTDIR)$(EDIT_BROKER_STAGING_DIR)
   $(INSTALL) -d $(DESTDIR)$(DOAS_SNIPPET_DIR)
   $(INSTALL) -d $(DESTDIR)$(BROKER_CONFIG_DIR)
-  $(INSTALL) -d $(DESTDIR)$(PREFIX)/share/doas-sudo-shim
+  $(INSTALL) -d $(DESTDIR)$(PREFIX)/share/doasudo
   sed \
     $(call _sed_entry,EDIT_BROKER_PATH,$(EDIT_BROKER_PATH)) \
     $(call _sed_entry,EDIT_BROKER_USER,$(EDIT_BROKER_USER)) \
@@ -285,9 +285,9 @@ install: doas-sudo-shim $(if $(subst broker/edit-broker.sh,,$(EDIT_BROKER_SRC)),
     config/edit-broker.doas.conf.in > $(DESTDIR)$(DOAS_SNIPPET_DIR)/doas-snippet.conf
   chmod 644 $(DESTDIR)$(DOAS_SNIPPET_DIR)/doas-snippet.conf
   $(INSTALL) -m 644 config/edit-broker.editors.example \
-    $(DESTDIR)$(PREFIX)/share/doas-sudo-shim/
+    $(DESTDIR)$(PREFIX)/share/doasudo/
   $(INSTALL) -m 755 "$(CURDIR)/packaging/post-install.sh" \
-    $(DESTDIR)$(PREFIX)/share/doas-sudo-shim/post-install.sh
+    $(DESTDIR)$(PREFIX)/share/doasudo/post-install.sh
   $(INSTALL) -m 644 config/vimrc $(DESTDIR)$(BROKER_CONFIG_DIR)/vimrc
   $(INSTALL) -d $(DESTDIR)$(dir $(BROKER_ALLOWLIST_PATH))
   @if [ ! -f "$(DESTDIR)$(BROKER_ALLOWLIST_PATH)" ]; then \
@@ -349,36 +349,36 @@ check-broker-e2e:
 
 .DEFAULT_GOAL := check
 
-# Tests on .in and generated libs (no doas-sudo-shim binary build first).
+# Tests on .in and generated libs (no doasudo binary build first).
 # Order: shim core (flags/parser/edit-mode), broker-contracts + allowlist + vim-profile,
 # broker-integration (EDITBROKER matrix), broker test-driver, then stale-metadata
-# last (removes doas-sudo-shim after repair check).
+# last (removes doasudo after repair check).
 .PHONY: check-src
 check-src: lib/shim-utils.sh lib/edit-broker-client.sh broker/edit-broker.sh
   @printf '\n'
-  sh tests/doas-flags-parity_test.sh doas-sudo-shim.in
-  sh tests/parser_test.sh doas-sudo-shim.in
-  sh tests/edit-mode_test.sh doas-sudo-shim.in
+  sh tests/doas-flags-parity_test.sh doasudo.in
+  sh tests/parser_test.sh doasudo.in
+  sh tests/edit-mode_test.sh doasudo.in
   sh broker/tests/broker-contracts_test.sh
   sh broker/tests/allowlist-parse_test.sh
   sh broker/tests/vim-profile_test.sh
-  sh broker/tests/broker-integration_test.sh doas-sudo-shim.in
+  sh broker/tests/broker-integration_test.sh doasudo.in
   sh broker/tests/test-driver.sh
   sh tests/stale-metadata_test.sh
 
 # check-src runs tests that rebuild lib/shim-utils.sh with a mock SHIM_PATH; release
 # shim must bake UTILS_METADATA from the tree-default lib. Rebuild lib + shim after tests.
-# Suite still runs on doas-sudo-shim.in (not the binary) for flag/parser/edit cases.
+# Suite still runs on doasudo.in (not the binary) for flag/parser/edit cases.
 # MAKE_VERBOSITY: matches tests/testlib.sh _make_s; silent unless VERBOSE=1.
 MAKE_VERBOSITY = $(if $(filter 1,$(VERBOSE)),,-s)
 .PHONY: check
 check: check-src
-  +$(MAKE) $(MAKE_VERBOSITY) -B lib/shim-utils.sh doas-sudo-shim
+  +$(MAKE) $(MAKE_VERBOSITY) -B lib/shim-utils.sh doasudo
 
 # Edit-mode tests only (sleep-heavy mtime cases). Targeted dev rerun.
 .PHONY: check-edit-mode check-writeback
 check-edit-mode check-writeback:
-  sh tests/edit-mode_test.sh doas-sudo-shim.in
+  sh tests/edit-mode_test.sh doasudo.in
 
 .PHONY: check-broker-contracts
 check-broker-contracts:
@@ -390,13 +390,13 @@ check-all: shellcheck check
 
 # ---- Lint --------------------------------------------------------------------------------
 
-# POSIX sh: doas-sudo-shim.in, lib/, broker/, packaging/, tests as listed below.
+# POSIX sh: doasudo.in, lib/, broker/, packaging/, tests as listed below.
 # CI: .github/workflows/ci.yml.
 .PHONY: shellcheck
 shellcheck: broker/edit-broker.sh lib/shim-utils.sh lib/edit-broker-client.sh
   shellcheck -s sh lib/shim-utils.sh
   shellcheck -s sh lib/edit-broker-client.sh
-  shellcheck -s sh -x doas-sudo-shim.in
+  shellcheck -s sh -x doasudo.in
   shellcheck -s sh packaging/post-install.sh
   shellcheck -s sh utils/metadata-utils.sh
   shellcheck -s sh tests/testlib.sh
@@ -424,8 +424,8 @@ shellcheck: broker/edit-broker.sh lib/shim-utils.sh lib/edit-broker-client.sh
 uninstall:
   @for f in $(DESTDIR)$(BINDIR)/editas $(DESTDIR)$(BINDIR)/sudoedit $(DESTDIR)$(BINDIR)/sudo; do \
     [ -e "$$f" ] || continue; \
-    grep -qF 'doas-sudo-shim' "$$f" 2>/dev/null \
-      || { printf 'error: %s does not appear to be the doas-sudo-shim; not removing\n' "$$f" >&2; exit 1; }; \
+    grep -qF 'doasudo' "$$f" 2>/dev/null \
+      || { printf 'error: %s does not appear to be the doasudo; not removing\n' "$$f" >&2; exit 1; }; \
     rm -f "$$f"; \
   done
   rm -f $(DESTDIR)$(EDIT_BROKER_PATH)
@@ -437,9 +437,9 @@ uninstall:
   @rmdir "$(DESTDIR)$(dir $(EDIT_BROKER_PATH))" 2>/dev/null || true
   rm -f $(DESTDIR)$(DOAS_SNIPPET_DIR)/doas-snippet.conf
   rm -rf "$(DESTDIR)$(BROKER_CONFIG_DIR)"
-  rm -f $(DESTDIR)$(PREFIX)/share/doas-sudo-shim/edit-broker.editors.example
-  rm -f $(DESTDIR)$(PREFIX)/share/doas-sudo-shim/post-install.sh
-  @rmdir "$(DESTDIR)$(PREFIX)/share/doas-sudo-shim" 2>/dev/null || true
+  rm -f $(DESTDIR)$(PREFIX)/share/doasudo/edit-broker.editors.example
+  rm -f $(DESTDIR)$(PREFIX)/share/doasudo/post-install.sh
+  @rmdir "$(DESTDIR)$(PREFIX)/share/doasudo" 2>/dev/null || true
   @rmdir "$(DESTDIR)$(DOAS_SNIPPET_DIR)" 2>/dev/null || true
   rm -f $(DESTDIR)$(SHIM_UTILS) $(DESTDIR)$(EDIT_BROKER_CLIENT)
   @rmdir "$(DESTDIR)$(SHIM_LIBEXEC_DIR)" 2>/dev/null || true
@@ -450,4 +450,4 @@ uninstall:
 
 .PHONY: clean
 clean:
-  rm -f doas-sudo-shim broker/edit-broker.sh lib/shim-utils.sh lib/edit-broker-client.sh
+  rm -f doasudo broker/edit-broker.sh lib/shim-utils.sh lib/edit-broker-client.sh

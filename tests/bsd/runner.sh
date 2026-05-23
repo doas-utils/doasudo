@@ -60,8 +60,8 @@ _test() {
     printf '%s: not a directory: %s\n' "$0" "$BSD_WORKDIR" >&2
     exit 1
   }
-  [ -f "${BSD_WORKDIR}/doas-sudo-shim.in" ] || {
-    printf '%s: missing doas-sudo-shim.in in %s\n' "$0" "$BSD_WORKDIR" >&2
+  [ -f "${BSD_WORKDIR}/doasudo.in" ] || {
+    printf '%s: missing doasudo.in in %s\n' "$0" "$BSD_WORKDIR" >&2
     exit 1
   }
   [ "$(uname)" = NetBSD ] && _pp=/usr/pkg/bin || _pp=/usr/local/bin

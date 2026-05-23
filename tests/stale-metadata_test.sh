@@ -1,11 +1,11 @@
 #!/bin/sh
 
 # SPDX-License-Identifier: MIT
-# See LICENSE.md. Part of doas-utils/doas-sudo-shim.
+# See LICENSE.md. Part of doas-utils/doasudo.
 #
 # Verifies the auto-update process for stale shim metadata. Integration suites
 # rebuild lib/shim-utils.sh (e.g., to mock SHIM_PATH) without rebuilding the
-# main doas-sudo-shim binary. This script asserts that a forced rebuild
+# main doasudo binary. This script asserts that a forced rebuild
 # (`make -B`) correctly synchronizes the embedded _SHIM_UTILS_METADATA hash.
 
 set -eu
@@ -26,15 +26,15 @@ fail() {
 _pick_sha_tool || fail 'no sha256sum / sha256 / shasum'
 
 _meta_from_shim() {
-  sed -n "s/^_SHIM_UTILS_METADATA='\\([^']*\\)'$/\\1/p" "$_root/doas-sudo-shim" | head -n1
+  sed -n "s/^_SHIM_UTILS_METADATA='\\([^']*\\)'$/\\1/p" "$_root/doasudo" | head -n1
 }
 
 # Prior tests leave lib/shim-utils.sh newer than .in but still mock-embedded; without
 # -B, make skips lib regen and want_rel would be mock digest while repair restores release.
 # shellcheck disable=SC2046
-"$MAKE" $(_make_s) -B lib/shim-utils.sh doas-sudo-shim \
+"$MAKE" $(_make_s) -B lib/shim-utils.sh doasudo \
   || fail 'release lib/shim build failed'
-[ -f "$_root/doas-sudo-shim" ] || fail 'doas-sudo-shim missing'
+[ -f "$_root/doasudo" ] || fail 'doasudo missing'
 
 want_rel=$(_compute_metadata "$_root/lib/shim-utils.sh" 644) \
   || fail '_compute_metadata release failed'
@@ -70,7 +70,7 @@ got=$(_meta_from_shim)
   || fail 'REGRESSION: shim bake already matches mocked lib (stale class not observable; check test assumptions)'
 
 # shellcheck disable=SC2046
-"$MAKE" $(_make_s) -B lib/shim-utils.sh doas-sudo-shim || fail 'repair make failed'
+"$MAKE" $(_make_s) -B lib/shim-utils.sh doasudo || fail 'repair make failed'
 
 want_fin=$(_compute_metadata "$_root/lib/shim-utils.sh" 644) \
   || fail '_compute_metadata after repair failed'
@@ -79,6 +79,6 @@ got=$(_meta_from_shim)
 [ "$got" = "$want_rel" ] \
   || fail "repair did not restore release metadata (got=$got want_rel=$want_rel)"
 
-rm -f doas-sudo-shim
+rm -f doasudo
 
 printf '\nPASS stale-metadata_test\n\n'

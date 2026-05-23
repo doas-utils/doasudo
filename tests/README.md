@@ -79,8 +79,8 @@ Run the integration suite for a specific userland:
 
 ```sh
 # Replace 'Alpine' with 'Chimera' to test a BSD-style userland
-docker build -f tests/docker/Alpine.Dockerfile -t sudo-shim-alpine .
-docker run --rm -it sudo-shim-alpine
+docker build -f tests/docker/Alpine.Dockerfile -t doasudo-alpine .
+docker run --rm -it doasudo-alpine
 ```
 
 ### AnyVM (BSD)

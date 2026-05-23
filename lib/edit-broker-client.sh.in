@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: MIT
-# See LICENSE.md. Part of doas-utils/doas-sudo-shim.
+# See LICENSE.md. Part of doas-utils/doasudo.
 #
-# EDITBROKER/1 client: sourced by doas-sudo-shim (broker mode only).
+# EDITBROKER/1 client: sourced by doasudo (broker mode only).
 # `_run_edit_broker` follows the IPC protocol from `broker/Broker IPC Spec.md`.
 #
 # _EDIT_BROKER_USER, _MAGIC, _MAX_BROKER_BYTES, and _BROKER_RESPONSE_TIMEOUT_S

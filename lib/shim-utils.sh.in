@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: MIT
-# See LICENSE.md. Part of doas-utils/doas-sudo-shim.
+# See LICENSE.md. Part of doas-utils/doasudo.
 #
 # Shared helpers and baked PATH resolution. The broker reuses this file so
 # checksum tools and core utilities match the shim's.
 #
-# Installed as $(PREFIX)/libexec/doas-sudo-shim/shim-utils.sh
-# Sourced by doas-sudo-shim and the edit-broker.
+# Installed as $(PREFIX)/libexec/doasudo/shim-utils.sh
+# Sourced by doasudo and the edit-broker.
 
 # shellcheck shell=sh
 
@@ -106,7 +106,7 @@ _stat_fd_probe() {
 }
 
 # GNU vs BSD stat(1): sets _STAT and all *_STAT_* format flags.
-# Callers: doas-sudo-shim edit mode (and _get_* helpers below), reference edit-broker (metadata).
+# Callers: doasudo edit mode (and _get_* helpers below), reference edit-broker (metadata).
 # Returns 2 if stat(1) is not in PATH, 1 if present but neither GNU nor BSD format works.
 _stat_probe() {
   _STAT=$(_resolve_bin stat) || return 2
@@ -184,7 +184,7 @@ _check_file_meta() {
   [ "${_cfm_hex}:${_cfm_ugm}" = "$_cfm_baked" ]
 }
 
-# Binaries used by both doas-sudo-shim edit mode and the edit broker
+# Binaries used by both the shim's edit mode and edit broker
 # (dd, rm, wc, mktemp, cat). Callers resolve awk locally if needed.
 # The shim resolves other edit-only tools (mv, tee, chmod, ...) locally after this.
 _resolve_edit_mode_tools() {

@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SPDX-License-Identifier: MIT
-# See LICENSE.md. Part of doas-utils/doas-sudo-shim.
+# See LICENSE.md. Part of doas-utils/doasudo.
 #
 # Verifies broker vim profile wiring and shipped vimrc hardening:
 # - _resolve_editor vim arm uses fixed flags/config basename.

@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SPDX-License-Identifier: MIT
-# See LICENSE.md. Part of doas-utils/doas-sudo-shim.
+# See LICENSE.md. Part of doas-utils/doasudo.
 #
 # Helpers for broker-focused shell tests. Source tests/testlib.sh first (_pass_t / _fail_t),
 # then this file. Used from tests/edit-mode_test.sh, broker/tests/*.sh, etc.

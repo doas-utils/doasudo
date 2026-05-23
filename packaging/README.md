@@ -42,11 +42,11 @@ The Makefile builds and installs the following layout. Pass `OVERWRITE_SYMLINKS=
 | `$(SHIM_LIBEXEC_DIR)/edit-broker` | Edit broker |
 | `$(SHIM_LIBEXEC_DIR)/allowlist-parse.awk` | Allowlist parser |
 | `$(SHIM_LIBEXEC_DIR)/edit-broker-contracts.env` | Wire-limit constants |
-| `$(EDIT_BROKER_STAGING_DIR)` | Broker staging path (default: `/var/lib/doas-sudo-shim/editbroker`) |
+| `$(EDIT_BROKER_STAGING_DIR)` | Broker staging path (default: `/var/lib/doasudo/editbroker`) |
 | `$(DOAS_SNIPPET_DIR)/doas-snippet.conf` | Policy snippet to merge into `/etc/doas.conf` |
 | `$(BROKER_CONFIG_DIR)/` | Shipped configs directory (`vimrc` at `$(BROKER_CONFIG_DIR)/vimrc`) |
 | `$(BROKER_ALLOWLIST_PATH)` | Live allowlist (seeded only if missing) |
-| `$(PREFIX)/share/doas-sudo-shim/` | Path for reference allowlist and `post-install.sh` |
+| `$(PREFIX)/share/doasudo/` | Path for reference allowlist and `post-install.sh` |
 
 *Security Requirement:* Root must own `$BINDIR`, `$SHIM_LIBEXEC_DIR`, `$BROKER_CONFIG_DIR`, and `$BROKER_ALLOWLIST_PATH` to prevent unprivileged users from replacing the shim or its supporting scripts and bypassing the security boundary. This is a core assumption of the security model that the installation process does not actively enforce at runtime.
 
@@ -86,7 +86,7 @@ Removed components:
 - Shim symlinks and binaries.
 - The `$(SHIM_LIBEXEC_DIR)` payload (utilities, client, broker, IPC contracts).
 - The default staging tree and shipped `vimrc`.
-- The `share/doas-sudo-shim/` directory.
+- The `share/doasudo/` directory.
 
 Preserved components:
 - `$(BROKER_ALLOWLIST_PATH)` remains intact to preserve local site policy.

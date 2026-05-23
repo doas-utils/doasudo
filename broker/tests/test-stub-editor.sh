@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SPDX-License-Identifier: MIT
-# See LICENSE.md. Part of doas-utils/doas-sudo-shim.
+# See LICENSE.md. Part of doas-utils/doasudo.
 #
 # Stub editor for broker/tests/test-driver.sh: exits successfully without modifying
 # the file by default. Headless harnesses bake EDIT_BROKER_TTY=/dev/null into the broker.

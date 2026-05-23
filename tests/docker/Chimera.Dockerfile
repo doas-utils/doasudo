@@ -2,8 +2,8 @@
 # Image is suitable for manual `sudo` / `doas` checks;
 # default user is `user` (wheel + editas, nopass rule).
 #
-#   docker build -f tests/docker/Chimera.Dockerfile -t sudo-shim-chimera .
-#   docker run --rm -it sudo-shim-chimera
+#   docker build -f tests/docker/Chimera.Dockerfile -t doasudo-chimera .
+#   docker run --rm -it doasudo-chimera
 
 FROM chimeralinux/chimera:latest
 
@@ -28,7 +28,7 @@ USER user
 WORKDIR /src
 RUN gmake EDIT_BROKER_TTY=/dev/null \
     && doas gmake install EDIT_BROKER_TTY=/dev/null \
-    && doas sh -c 'cat /etc/doas-sudo-shim/doas-snippet.conf >> /etc/doas.conf' \
+    && doas sh -c 'cat /etc/doasudo/doas-snippet.conf >> /etc/doas.conf' \
     && doas chown -R user /src
 
 CMD ["sh"]

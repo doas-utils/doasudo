@@ -1,9 +1,9 @@
 #!/bin/sh
 
 # SPDX-License-Identifier: MIT
-# See LICENSE.md. Part of doas-utils/doas-sudo-shim.
+# See LICENSE.md. Part of doas-utils/doasudo.
 #
-# doas-sudo-shim: translate sudo(8) calls to doas(1) with full option coverage,
+# doasudo: translate sudo(8) calls to doas(1) with full option coverage,
 # POSIX-safe argument parsing, and security hardening.
 #
 # Compatibility: Linux, OpenBSD, FreeBSD, NetBSD, DragonFly BSD, macOS
@@ -258,7 +258,7 @@ edit_mode_tty_info() {
 
 # doas has no version flag; report without probing.
 _print_version() {
-  printf 'doas-sudo-shim %s / doas (version unknown)\n' "$_VERSION"
+  printf 'doasudo %s / doas (version unknown)\n' "$_VERSION"
 }
 
 _print_list_notice() {

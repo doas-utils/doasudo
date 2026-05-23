@@ -1,4 +1,4 @@
-# doas-sudo-shim: narrow rule for the edit broker.
+# doasudo: narrow rule for the edit broker.
 # make install also writes this as doas-snippet.conf under DOAS_SNIPPET_DIR.
 #
 # Do not merge blindly. Adjust @DOAS_PERMIT_IDENTITY@ to match site policy.

@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SPDX-License-Identifier: MIT
-# See LICENSE.md. Part of doas-utils/doas-sudo-shim.
+# See LICENSE.md. Part of doas-utils/doasudo.
 #
 # Validates the `sudoedit` (-e) execution path, focusing on secure temporary
 # file handling, elevated write-back logic, and interactive confirmations.
@@ -18,7 +18,7 @@
 # (Shim + mock EDITBROKER IPC matrix: broker/tests/broker-integration_test.sh.)
 #
 # Usage:
-#   sh edit-mode_test.sh [path/to/doas-sudo-shim.in]
+#   sh edit-mode_test.sh [path/to/doasudo.in]
 #
 # Constraints:
 # - Interactive confirmations (`y`) require a `socat` pseudo-terminal.
@@ -37,7 +37,7 @@ _skip=0
 _self_dir=$(cd "$(dirname "$0")" && pwd)
 _repo_root=$(CDPATH="" cd -P -- "$_self_dir/.." && pwd)
 
-_shim_src="${1:-${_repo_root}/doas-sudo-shim.in}"
+_shim_src="${1:-${_repo_root}/doasudo.in}"
 [ -f "$_shim_src" ] || { printf 'error: shim source not found: %s\n' "$_shim_src" >&2; exit 1; }
 
 # shellcheck source=testlib.sh
@@ -192,7 +192,7 @@ _guard_wb_extract_exit_paths() {
 }
 
 # Replay extracted write-back fragment: stdin matches shim fd 3. Args follow
-# _doas ... sh -c in doas-sudo-shim.in: mv, rm, cat, stat, chmod, chown, cksum,
+# _doas ... sh -c in doasudo.in: mv, rm, cat, stat, chmod, chown, cksum,
 # _ckflg, inode, digest, owner:group, mode, wbtmp, target (cat--chown from
 # mockbin). Sets _rc, _err.
 # $1 stderr suffix; $2 mv; $3 sha tool; $4 digest; $5 staging; $6 target;
@@ -722,7 +722,7 @@ else
 fi
 
 # ---- Extracted write-back body (verbatim sh -c from shim) ---------------------------------
-# Source: doas-sudo-shim.in _doas /bin/sh -c '...' _ ... After _: cat ... _f.
+# Source: doasudo.in _doas /bin/sh -c '...' _ ... After _: cat ... _f.
 # stdin = staged bytes (cat into held fd 5). Exit paths: shim table +
 # _guard_wb_extract_exit_paths.
 

@@ -1,13 +1,13 @@
 #!/bin/sh
 
 # SPDX-License-Identifier: MIT
-# See LICENSE.md. Part of doas-utils/doas-sudo-shim.
+# See LICENSE.md. Part of doas-utils/doasudo.
 #
 # ---
 #
 # SECURITY NOTE
 #
-# Default edit mode in doas-sudo-shim.in stages each file under the invoking
+# Default edit mode in doasudo.in stages each file under the invoking
 # user; the shim's SECURITY NOTE at the top of that file documents a set of
 # mitigations for that layout. Same-UID exposure of the temporary file during
 # the lifetime of the editor session remains within that trust boundary.
@@ -97,7 +97,7 @@ fail() {
 }
 fatal() { fail "$*"; } # shim-utils _init calls fatal
 
-[ -r "$_SHIM_UTILS_PATH" ] || fail "missing shim utils: $_SHIM_UTILS_PATH (install doas-sudo-shim libexec components)"
+[ -r "$_SHIM_UTILS_PATH" ] || fail "missing shim utils: $_SHIM_UTILS_PATH (install doasudo libexec components)"
 # shellcheck source=../lib/shim-utils.sh
 . "$_SHIM_UTILS_PATH"
 
@@ -334,7 +334,7 @@ _broker_exit_cleanup() {
   "$_RM" -f "${_session_lock:-}/pid" 2>/dev/null || true
   "$_RMDIR" "${_session_lock:-}" 2>/dev/null || true
 }
-# Same pattern as doas-sudo-shim edit mode: EXIT holds cleanup; HUP/INT/TERM/QUIT
+# Same pattern as doasudo edit mode: EXIT holds cleanup; HUP/INT/TERM/QUIT
 # exit through normal shell teardown so EXIT runs (portable vs relying on EXIT
 # alone after async signals). Broker uses exit 0 for protocol; shim uses exit 1.
 trap '_broker_exit_cleanup' EXIT

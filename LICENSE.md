@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026-present doas-utils/doas-sudo-shim contributors
+Copyright (c) 2026-present doas-utils/doasudo contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

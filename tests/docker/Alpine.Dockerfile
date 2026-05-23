@@ -2,8 +2,8 @@
 # Image is suitable for manual `sudo` / `doas` checks;
 # default user is `user` (wheel + editas, nopass rule).
 #
-#   docker build -f tests/docker/Alpine.Dockerfile -t sudo-shim-alpine .
-#   docker run --rm -it sudo-shim-alpine
+#   docker build -f tests/docker/Alpine.Dockerfile -t doasudo-alpine .
+#   docker run --rm -it doasudo-alpine
 
 FROM alpine:3.20
 
@@ -25,7 +25,7 @@ USER user
 WORKDIR /src
 RUN make EDIT_BROKER_TTY=/dev/null \
     && doas make install EDIT_BROKER_TTY=/dev/null \
-    && doas sh -c 'cat /etc/doas-sudo-shim/doas-snippet.conf >> /etc/doas.conf' \
+    && doas sh -c 'cat /etc/doasudo/doas-snippet.conf >> /etc/doas.conf' \
     && doas chown -R user /src
 
 CMD ["sh"]

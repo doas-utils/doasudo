@@ -1,8 +1,8 @@
-# doas-sudo-shim
+# doasudo
 
 A POSIX shell shim that translates `sudo(8)` invocations to `doas(1)`, with full option coverage, POSIX-safe argument parsing, and security hardening. Drop it in as `sudo` on systems where doas is the privilege escalation tool; scripts that call `sudo` (mostly) work without modification.
 
-Inspired by [jirutka/doas-sudo-shim](https://github.com/jirutka/doas-sudo-shim).
+Inspired by [jirutka/doas-sudo-shim](https://github.com/jirutka/doas-sudo-shim) (if you don't need edit-mode support and want a minimal translation layer consider this as an option)
 
 Compatibility: Linux, FreeBSD, OpenBSD, NetBSD, DragonFly BSD, macOS
 
@@ -68,7 +68,7 @@ The shim installs `editas` alongside `sudoedit`. The name `doasedit` already exi
 
 ### Security model
 
-Two attack families in edit mode are in scope. *Symlink substitution:* an attacker replaces a path component or the target with a symlink, so the privileged write-back lands on the wrong file. *Temp-file substitution:* the unprivileged working copy is replaced or modified during the edit session so unexpected content reaches the real target during privileged write-back. A set of mitigations address these; the full security model is documented in the `SECURITY NOTE` at the top of `doas-sudo-shim.in`.
+Two attack families in edit mode are in scope. *Symlink substitution:* an attacker replaces a path component or the target with a symlink, so the privileged write-back lands on the wrong file. *Temp-file substitution:* the unprivileged working copy is replaced or modified during the edit session so unexpected content reaches the real target during privileged write-back. A set of mitigations address these; the full security model is documented in the `SECURITY NOTE` at the top of `doasudo.in`.
 
 ### Optional (paranoid) edit-mode broker
 
@@ -112,7 +112,7 @@ make            # full test suite and shim build (run before privileged install)
 
 For per-test details and docker images, see [tests/README.md](tests/README.md).
 
-If the test suite cannot run in your environment, build with `make doas-sudo-shim` and install files to match a normal `make install` layout (the shim expects `shim-utils.sh` and `edit-broker-client.sh` under `$(PREFIX)/libexec/doas-sudo-shim/`, with the broker and contracts beside them). When using `DESTDIR` for a staged install, run `make` (or `make check-src`) on a host similar to the deployment target first. See [packaging/README.md](packaging/README.md).
+If the test suite cannot run in your environment, build with `make doasudo` and install files to match a normal `make install` layout (the shim expects `shim-utils.sh` and `edit-broker-client.sh` under `$(PREFIX)/libexec/doasudo/`, with the broker and contracts beside them). When using `DESTDIR` for a staged install, run `make` (or `make check-src`) on a host similar to the deployment target first. See [packaging/README.md](packaging/README.md).
 
 ---
 

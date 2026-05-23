@@ -10,7 +10,7 @@ doas -u <editbroker_user> -- <path-to-broker>
 
 The shim sends the request on `stdin`. The broker sends the response on `stdout`. `stderr` carries diagnostics only.
 
-The file `config/edit-broker-contracts.env` holds all shared constants. The test `broker/tests/broker-contracts_test.sh` checks them. The shim and the broker both source `shim-utils.sh` (installed under `libexec/doas-sudo-shim/`). Checksum tool paths do not go on the wire.
+The file `config/edit-broker-contracts.env` holds all shared constants. The test `broker/tests/broker-contracts_test.sh` checks them. The shim and the broker both source `shim-utils.sh` (installed under `libexec/doasudo/`). Checksum tool paths do not go on the wire.
 
 The shim sources `lib/edit-broker-client.sh` in broker mode only. The broker does not load that file.
 
@@ -136,7 +136,7 @@ When `SUDO_SHIM_EDIT_BROKER=1`, any broker, `doas`, or protocol failure is fatal
 
 | File | Role |
 |------|------|
-| `doas-sudo-shim.in` | Shim: builds request, parses response, enforces timeout and metadata. |
+| `doasudo.in` | Shim: builds request, parses response, enforces timeout and metadata. |
 | `lib/edit-broker-client.sh.in` | Client helpers for broker mode. Bakes `EDIT_BROKER_USER`, `MAGIC`, `MAX_BROKER_BYTES`, `BROKER_RESPONSE_TIMEOUT_S`. |
 | `lib/shim-utils.sh.in` | Shared helpers: binary resolution, checksum, stat, metadata checks, byte I/O. |
 | `broker/edit-broker.sh.in` | Broker source. Bakes staging dir, allowlist path, parser path, TTY path, `SHIM_PATH`, utils metadata, contract constants. |

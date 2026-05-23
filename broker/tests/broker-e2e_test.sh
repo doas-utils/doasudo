@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SPDX-License-Identifier: MIT
-# See LICENSE.md. Part of doas-utils/doas-sudo-shim.
+# See LICENSE.md. Part of doas-utils/doasudo.
 #
 # broker-e2e_test.sh: host integration check with real doas(1), edit broker, baked shim.
 #
@@ -9,7 +9,7 @@
 #
 # Prerequisites:
 # - Shim installed and on PATH as `sudo` (override with SHIM=) and must be
-#   doas-sudo-shim (grepped from file).
+#   doasudo (grepped from file).
 # - Broker executable at EDIT_BROKER_PATH (default below).
 # - Shim was *built after* that broker was installed so EDIT_BROKER_METADATA matches.
 # - doas.conf permits: permit ... as editbroker cmd <EDIT_BROKER_PATH>
@@ -20,11 +20,11 @@
 #   overlays often make /var* components -w for test users). Default is under
 #   PREFIX/share beside other install assets. Bootstrap once as root via
 #   broker-e2e-setup.sh, or e.g.:
-#     install -d /usr/local/share/doas-sudo-shim
+#     install -d /usr/local/share/doasudo
 #     umask 022
-#     printf 'seed\n' > /usr/local/share/doas-sudo-shim/broker-e2e-seed
-#     chown 0:0 /usr/local/share/doas-sudo-shim/broker-e2e-seed
-#     chmod 644 /usr/local/share/doas-sudo-shim/broker-e2e-seed
+#     printf 'seed\n' > /usr/local/share/doasudo/broker-e2e-seed
+#     chown 0:0 /usr/local/share/doasudo/broker-e2e-seed
+#     chmod 644 /usr/local/share/doasudo/broker-e2e-seed
 #
 # Usage:
 #   sh tests/broker-e2e_test.sh
@@ -50,13 +50,13 @@ case "$SHIM" in
 	;;
 esac
 [ -x "$_shim" ] || die "not executable: $_shim"
-grep -q 'doas-sudo-shim' "$_shim" 2>/dev/null \
-	|| die "file does not look like doas-sudo-shim (wrong SHIM=?): $_shim"
+grep -q 'doasudo' "$_shim" 2>/dev/null \
+	|| die "file does not look like doasudo (wrong SHIM=?): $_shim"
 
-EDIT_BROKER_PATH=${EDIT_BROKER_PATH:-/usr/local/libexec/doas-sudo-shim/edit-broker}
+EDIT_BROKER_PATH=${EDIT_BROKER_PATH:-/usr/local/libexec/doasudo/edit-broker}
 [ -x "$EDIT_BROKER_PATH" ] || die "broker not executable: $EDIT_BROKER_PATH (make install / set EDIT_BROKER_PATH)"
 
-ALLOWLIST_PATH=${ALLOWLIST_PATH:-/etc/doas-sudo-shim/edit-broker.editors}
+ALLOWLIST_PATH=${ALLOWLIST_PATH:-/etc/doasudo/edit-broker.editors}
 [ -r "$ALLOWLIST_PATH" ] || die "allowlist not readable: $ALLOWLIST_PATH"
 
 BROKER_E2E_EDITOR=${BROKER_E2E_EDITOR:-"$_root/broker/e2e-append-editor.sh"}
@@ -79,7 +79,7 @@ done <"$ALLOWLIST_PATH"
 [ "$_allowlisted" -eq 1 ] \
 	|| die "allowlist missing editor line starting with: $BROKER_E2E_EDITOR (see $ALLOWLIST_PATH)"
 
-BROKER_E2E_TARGET=${BROKER_E2E_TARGET:-/usr/local/share/doas-sudo-shim/broker-e2e-seed}
+BROKER_E2E_TARGET=${BROKER_E2E_TARGET:-/usr/local/share/doasudo/broker-e2e-seed}
 [ -f "$BROKER_E2E_TARGET" ] || die "target missing: $BROKER_E2E_TARGET (create per header comment as root)"
 [ -r "$BROKER_E2E_TARGET" ] || die "target not readable: $BROKER_E2E_TARGET"
 

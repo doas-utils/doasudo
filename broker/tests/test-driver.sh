@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # SPDX-License-Identifier: MIT
-# See LICENSE.md. Part of doas-utils/doas-sudo-shim.
+# See LICENSE.md. Part of doas-utils/doasudo.
 #
 # Test driver for broker/edit-broker.sh: builds framed requests, runs the broker,
 # parses stdout. Examples use stanza `[nano]` (registry profile `nano`); see
