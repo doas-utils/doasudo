@@ -9,7 +9,7 @@ jobs:
     name: ShellCheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@064fe7f3312418007dea2b49a19844a9ee378f49
 
       - name: Install ShellCheck
         run: |
@@ -33,12 +33,12 @@ jobs:
             make_bin: gmake
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@064fe7f3312418007dea2b49a19844a9ee378f49
 
       # Pinned copy of https://github.com/GiovanniBussi/macports-ci
       - name: Checkout macports-ci (pinned)
         if: runner.os == 'macOS'
-        uses: actions/checkout@v4
+        uses: actions/checkout@064fe7f3312418007dea2b49a19844a9ee378f49
         with:
           repository: GiovanniBussi/macports-ci
           ref: 7e72ecdc52a15803c199ec11667b7a9e21695f7b
@@ -96,7 +96,7 @@ jobs:
             make_bin: gmake
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@064fe7f3312418007dea2b49a19844a9ee378f49
 
       - name: Build image (RUN probes Makefile targets)
         run: docker build -f ${{ matrix.dockerfile }} -t ${{ matrix.tag }} .
@@ -141,7 +141,7 @@ jobs:
             make_bin: gmake
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@064fe7f3312418007dea2b49a19844a9ee378f49
 
       - name: Build test image
         run: docker build -f ${{ matrix.dockerfile }} -t ${{ matrix.tag }} .

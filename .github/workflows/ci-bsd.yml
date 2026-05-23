@@ -4,7 +4,8 @@
 name: doasudo CI (BSD)
 
 on:
-  workflow_dispatch:
+  push:
+  pull_request:
 
 jobs:
   vmactions-bsd:
@@ -31,11 +32,11 @@ jobs:
         sh "$GITHUB_WORKSPACE/tests/bsd/runner.sh" test
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@064fe7f3312418007dea2b49a19844a9ee378f49
 
       - name: Tests in FreeBSD
         if: matrix.name == 'FreeBSD'
-        uses: vmactions/freebsd-vm@v1.4.5
+        uses: vmactions/freebsd-vm@e595e321d7b3c9231f1f219865792c92a158e247
         with: &vm-config
           usesh: true
           release: ${{ matrix.release }}
@@ -44,15 +45,15 @@ jobs:
 
       - name: Tests in OpenBSD
         if: matrix.name == 'OpenBSD'
-        uses: vmactions/openbsd-vm@v1.4.0
+        uses: vmactions/openbsd-vm@fef78913de54d40de980cd26628b7fd08aa32685
         with: *vm-config
 
       - name: Tests in NetBSD
         if: matrix.name == 'NetBSD'
-        uses: vmactions/netbsd-vm@v1.3.8
+        uses: vmactions/netbsd-vm@c86c968c55bb8d27290a754b76bcf99778c620ff
         with: *vm-config
 
       - name: Tests in DragonFly BSD
         if: matrix.name == 'DragonFly BSD'
-        uses: vmactions/dragonflybsd-vm@v1.2.8
+        uses: vmactions/dragonflybsd-vm@04c4dcd7feb0870671979ca5347ffa476e83b218
         with: *vm-config
