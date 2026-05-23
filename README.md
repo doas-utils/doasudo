@@ -2,7 +2,7 @@
 
 A POSIX shell shim that translates `sudo(8)` invocations to `doas(1)`, with full option coverage, POSIX-safe argument parsing, and security hardening. Drop it in as `sudo` on systems where doas is the privilege escalation tool; scripts that call `sudo` (mostly) work without modification.
 
-Inspired by [jirutka/doas-sudo-shim](https://github.com/jirutka/doas-sudo-shim) (if you don't need edit-mode support and want a minimal translation layer consider this as an option)
+Inspired by [jirutka/doas-sudo-shim](https://github.com/jirutka/doas-sudo-shim) (if you don't need edit-mode support and want a minimal translation layer, consider this as an option).
 
 Compatibility: Linux, FreeBSD, OpenBSD, NetBSD, DragonFly BSD, macOS
 
@@ -41,7 +41,7 @@ Restrictive `cmd`-scoped rules are not supported. For instance, granting edit mo
 
 ## Edit mode
 
-Invoked as `sudo -e`, `sudoedit`, or `editas`, the shim copies target files to a temporary directory owned by the invoking user, runs the editor unprivileged, then writes back any changed files as the privileged user.
+When invoked as `sudo -e`, `sudoedit`, or `editas`, the shim copies target files to a temporary directory owned by the invoking user, runs the editor unprivileged, then writes back any changed files as the privileged user.
 
 Each file is processed in a separate editor session and written back independently, unlike real `sudoedit(8)`, which opens all files at once. For the common single-file case the behavior is identical.
 
