@@ -1323,7 +1323,7 @@ if [ "${flag_e:-}" ]; then
     # Apply `chmod 0400` via `/dev/fd/4` when supported to lock the inode the
     # fd refers to. Otherwise, fall back to the irreducible minimum: adjacent
     # `test` and path `chmod`. Post-chmod inode checks verify the fallback; the
-    # only residual risk here is a same-UID self-DoS.
+    # only residual risk here is a same-UID self-DoS on the tmpfile.
     #
     # Once $_tmpfile is sealed, unprivileged reads use `exec 3<` to read via an
     # open fd rather than a path in argv. Privileged reads use a single
@@ -1669,8 +1669,9 @@ if [ "${flag_e:-}" ]; then
     #
     # (d) `chown -h` on $_wb is symlink-safe. For non-executable modes, umask is
     #     set before O_CREAT so the mode is correct at creation. For the x-bit,
-    #     `chmod /dev/fd/5` is preferred; otherwise, a `[ ! -h ]` check and
-    #     path chmod form the irreducible fallback.
+    #     `chmod /dev/fd/5` is preferred; otherwise, a `[ ! -h ]` check and path
+    #     chmod are used as fallback. Path chmod follows symlinks, so for it to
+    #     be safe `_dir` needs to be writable only by the target-user (e.g. root).
     #
     # (e) Post-mv `stat -L = $_ref` and `[ ! -h "$_f" ]` confirm path identity
     #     at the target. Failures abort before cleanup; the shim does not
