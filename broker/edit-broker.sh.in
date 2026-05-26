@@ -369,7 +369,7 @@ _al_stderr=$("$_MKTEMP" "${_scratch_dir}/.allowlist-stderr.XXXXXXXX") \
 : >"$_al_stderr"
 
 _al_rc=0
-"$_AWK" -v EDITOR="$_editor_req" -f "$_ALLOWLIST_PARSER" "$_ALLOWLIST_PATH" >"$_prof_out" 2>"$_al_stderr" \
+EDITOR_REQ="$_editor_req" "$_AWK" -f "$_ALLOWLIST_PARSER" "$_ALLOWLIST_PATH" >"$_prof_out" 2>"$_al_stderr" \
   || _al_rc=$?
 
 if [ "$_al_rc" -eq 2 ]; then

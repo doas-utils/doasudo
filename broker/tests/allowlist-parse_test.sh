@@ -21,75 +21,75 @@ _FIX="$_here/fixtures/allowlist"
 trap '_broker_rm_tmps' EXIT
 
 [ -f "$_PARSER" ] || {
-	printf 'FAIL allowlist-parse_test: missing %s\n' "$_PARSER" >&2
-	exit 1
+  printf 'FAIL allowlist-parse_test: missing %s\n' "$_PARSER" >&2
+  exit 1
 }
 
 fail() {
-	printf 'FAIL allowlist-parse_test: %s\n' "$1" >&2
-	exit 1
+  printf 'FAIL allowlist-parse_test: %s\n' "$1" >&2
+  exit 1
 }
 
 pass_dump() {
-	_label=$1
-	_ed=$_FIX/$2
-	_want=$_FIX/$3
-	_out=$(_broker_make_temp) || fail "$_label: mktemp"
-	# stderr may contain executable warnings (DUMP runs test -x); compare stdout only
-	if ! "$AWK" -v DUMP=1 -f "$_PARSER" "$_ed" 2>/dev/null >"$_out"; then
-		fail "$_label: expected success"
-	fi
-	if ! diff -u "$_want" "$_out" >&2; then
-		fail "$_label: dump mismatch"
-	fi
-	printf 'PASS allowlist-parse_test: %s\n' "$_label"
+  _label=$1
+  _ed=$_FIX/$2
+  _want=$_FIX/$3
+  _out=$(_broker_make_temp) || fail "$_label: mktemp"
+  # stderr may contain executable warnings (DUMP runs test -x); compare stdout only
+  if ! "$AWK" -v DUMP=1 -f "$_PARSER" "$_ed" 2>/dev/null >"$_out"; then
+    fail "$_label: expected success"
+  fi
+  if ! diff -u "$_want" "$_out" >&2; then
+    fail "$_label: dump mismatch"
+  fi
+  printf 'PASS allowlist-parse_test: %s\n' "$_label"
 }
 
-# EDITOR=... query mode: EXEC + PROFILE lines, no test -x, stdout only
+# EDITOR_REQ=... query mode: EXEC + PROFILE lines, no test -x, stdout only
 pass_query() {
-	_label=$1
-	_ed=$_FIX/$2
-	_editor=$3
-	_want=$_FIX/$4
-	_out=$(_broker_make_temp) || fail "$_label: mktemp"
-	if ! "$AWK" -v EDITOR="$_editor" -f "$_PARSER" "$_ed" >"$_out"; then
-		fail "$_label: expected success"
-	fi
-	if ! diff -u "$_want" "$_out" >&2; then
-		fail "$_label: query mismatch"
-	fi
-	printf 'PASS allowlist-parse_test: %s\n' "$_label"
+  _label=$1
+  _ed=$_FIX/$2
+  _editor=$3
+  _want=$_FIX/$4
+  _out=$(_broker_make_temp) || fail "$_label: mktemp"
+  if ! EDITOR_REQ="$_editor" "$AWK" -f "$_PARSER" "$_ed" >"$_out"; then
+    fail "$_label: expected success"
+  fi
+  if ! diff -u "$_want" "$_out" >&2; then
+    fail "$_label: query mismatch"
+  fi
+  printf 'PASS allowlist-parse_test: %s\n' "$_label"
 }
 
 pass_fail() {
-	_label=$1
-	_ed=$_FIX/$2
-	if "$AWK" -f "$_PARSER" "$_ed" >/dev/null 2>&1; then
-		fail "$_label: expected parse failure"
-	fi
-	printf 'PASS allowlist-parse_test: %s\n' "$_label"
+  _label=$1
+  _ed=$_FIX/$2
+  if "$AWK" -f "$_PARSER" "$_ed" >/dev/null 2>&1; then
+    fail "$_label: expected parse failure"
+  fi
+  printf 'PASS allowlist-parse_test: %s\n' "$_label"
 }
 
 # Valid file, EDITOR not listed -> exit 2 (broker: user-facing "not allowlisted").
 pass_fail_query() {
-	_label=$1
-	_ed=$_FIX/$2
-	_editor=$3
-	_rc=0
-	"$AWK" -v EDITOR="$_editor" -f "$_PARSER" "$_ed" >/dev/null 2>&1 || _rc=$?
-	[ "$_rc" -eq 2 ] || fail "$_label: expected exit 2 (no match), got $_rc"
-	printf 'PASS allowlist-parse_test: %s\n' "$_label"
+  _label=$1
+  _ed=$_FIX/$2
+  _editor=$3
+  _rc=0
+  EDITOR_REQ="$_editor" "$AWK" -f "$_PARSER" "$_ed" >/dev/null 2>&1 || _rc=$?
+  [ "$_rc" -eq 2 ] || fail "$_label: expected exit 2 (no match), got $_rc"
+  printf 'PASS allowlist-parse_test: %s\n' "$_label"
 }
 
 # Malformed file with EDITOR set -> exit 1 (broker: admin / allowlist file problem).
 pass_fail_query_parse() {
-	_label=$1
-	_ed=$_FIX/$2
-	_editor=$3
-	_rc=0
-	"$AWK" -v EDITOR="$_editor" -f "$_PARSER" "$_ed" >/dev/null 2>&1 || _rc=$?
-	[ "$_rc" -eq 1 ] || fail "$_label: expected exit 1 (parse error), got $_rc"
-	printf 'PASS allowlist-parse_test: %s\n' "$_label"
+  _label=$1
+  _ed=$_FIX/$2
+  _editor=$3
+  _rc=0
+  EDITOR_REQ="$_editor" "$AWK" -f "$_PARSER" "$_ed" >/dev/null 2>&1 || _rc=$?
+  [ "$_rc" -eq 1 ] || fail "$_label: expected exit 1 (parse error), got $_rc"
+  printf 'PASS allowlist-parse_test: %s\n' "$_label"
 }
 
 printf '\n── Allowlist parse ─────────────────────────────────────────────────────────────\n'

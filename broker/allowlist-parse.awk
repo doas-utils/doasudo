@@ -8,10 +8,10 @@
 #     Validate only; exit 0 / 1.
 #   awk -v DUMP=1 -f allowlist-parse.awk /path/to/edit-broker.editors
 #     Lint / debug: canonical dump on stdout; optional test -x stderr warnings.
-#   awk -v EDITOR=/abs/path -f allowlist-parse.awk /path/to/edit-broker.editors
+#   EDITOR_REQ=/abs/path awk -f allowlist-parse.awk /path/to/edit-broker.editors
 #     Query: print EXEC line then PROFILE canonical name for first matching stanza.
-#     Exit 1 = malformed; exit 2 = valid file but EDITOR not listed.
-#     EDITOR takes precedence over DUMP; query mode skips test -x checks.
+#     Exit 1 = malformed; exit 2 = valid file but EDITOR_REQ not listed.
+#     EDITOR_REQ takes precedence over DUMP; query mode skips test -x checks.
 
 BEGIN {
   fatal = 0
@@ -21,6 +21,7 @@ BEGIN {
   npath = 0
   entry_match = 0
   entry_exec_path = ""
+  editor = ENVIRON["EDITOR_REQ"]
   editor_id = ""
   query_done = 0
 }
@@ -66,13 +67,13 @@ function flush_stanza(i) {
   if (!within_stanza) return
   if (npath < 1) die("stanza [" name "]: at least one path = is required")
 
-  if (EDITOR != "" && entry_match && !query_done) {
+  if (editor != "" && entry_match && !query_done) {
     query_done = 1
     print "EXEC", entry_exec_path
     print "PROFILE", editor_id
   }
 
-  if (DUMP && EDITOR == "") {
+  if (DUMP && editor == "") {
     print "STANZA", editor_id
     print "EXEC", paths[1]
     for (i = 2; i <= npath; i++) print "ALIAS", paths[i]
@@ -120,7 +121,7 @@ function flush_stanza(i) {
   global_path[val] = 1
   npath++
   paths[npath] = val
-  if (EDITOR != "" && val == EDITOR) {
+  if (editor != "" && val == editor) {
     entry_match = 1
     entry_exec_path = val
   }
@@ -135,9 +136,9 @@ END {
 
   flush_stanza()
 
-  if (EDITOR != "") {
+  if (editor != "") {
     if (!query_done) {
-      print "allowlist-parse: EDITOR not in allowlist: " EDITOR > "/dev/stderr"
+      print "allowlist-parse: editor not in allowlist: " editor > "/dev/stderr"
       exit 2
     }
   }
