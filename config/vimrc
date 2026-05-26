@@ -187,6 +187,7 @@ set modelines=0
 set noexrc
 set noloadplugins
 set packpath=
+set runtimepath=$VIMRUNTIME
 set secure
 set shell=/bin/false
 
