@@ -10,18 +10,6 @@
 
 # ---- Assertions shared by edit-mode_test + broker-integration_test -----------------
 
-_assert_exit() {
-  if [ "$3" -eq "$2" ]; then _pass_t "${1}: exit ${2}"
-  else _fail_t "${1}: exit ${2}" "got exit ${3}; stderr: ${_err:-<empty>}"; fi
-}
-
-_assert_stderr_contains() {
-  case "$3" in
-    *"${2}"*) _pass_t "${1}: stderr contains '${2}'" ;;
-    *)        _fail_t "${1}: stderr contains '${2}'" "got: ${3}" ;;
-  esac
-}
-
 # $1 label; $2 path; $3 expected (trailing newline lost via $())
 _assert_file_content() {
   if [ -f "$2" ]; then
@@ -79,12 +67,12 @@ _broker_make_temp() {
 # ---- Shim bake with SUDO_SHIM_EDIT_BROKER (edit-mode + broker-integration) ---------------
 
 # $1=output path $2=edit-broker path $3=EDIT_BROKER_METADATA value
-# Requires: _build_test_shim (testlib.sh); _repo_root _shim_src _mockbin _sys_path
+# Requires: _build_test_shim (testlib.sh); _repo _shim_src _mockbin _sys_path
 # _utils_metadata _version _eb_client _eb_client_meta (harness fills before call).
 # shellcheck disable=SC2154 # globals set by sourcing harness before call
 _build_edit_test_shim() {
-  _build_test_shim "$_repo_root" "$_shim_src" "$1" "${_mockbin}:${_sys_path}" \
-    "${_utils_metadata}" "${_version}" "${_repo_root}/lib/shim-utils.sh" \
+  _build_test_shim "$_repo" "$_shim_src" "$1" "${_mockbin}:${_sys_path}" \
+    "${_utils_metadata}" "${_version}" "${_repo}/lib/shim-utils.sh" \
     "${_eb_client}" "${_eb_client_meta}" \
     "$2" "$3" \
     --stub-edit-mode-root-guard \

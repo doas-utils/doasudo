@@ -7,7 +7,7 @@
 # file handling, elevated write-back logic, and interactive confirmations.
 #
 # The harness executes a mocked `doas` via `exec "$@"`. It simulates a UID 0
-# environment to trigger the root-invoked edit path, but strips the root guard 
+# environment to trigger the root-invoked edit path, but strips the root guard
 # and runs the "privileged" `sh -c` write-back on user-owned scratch files.
 #
 # Coverage:
@@ -34,20 +34,20 @@ _skip=0
 
 # ---- Locate source -----------------------------------------------------------------------
 
-_self_dir=$(cd "$(dirname "$0")" && pwd)
-_repo_root=$(CDPATH="" cd -P -- "$_self_dir/.." && pwd)
+_here=$(CDPATH="" cd -P -- "$(dirname "$0")" && pwd)
+_repo=$(CDPATH="" cd -P -- "$_here/.." && pwd)
 
-_shim_src="${1:-${_repo_root}/doasudo.in}"
+_shim_src="${1:-${_repo}/doasudo.in}"
 [ -f "$_shim_src" ] || { printf 'error: shim source not found: %s\n' "$_shim_src" >&2; exit 1; }
 
 # shellcheck source=testlib.sh
-. "$_self_dir/testlib.sh"
+. "$_here/testlib.sh"
 # shellcheck source=testlib-broker.sh
-. "$_self_dir/testlib-broker.sh"
+. "$_here/testlib-broker.sh"
 # shellcheck source=../utils/metadata-utils.sh
-. "$_repo_root/utils/metadata-utils.sh"
+. "$_repo/utils/metadata-utils.sh"
 
-_eb_contracts="$_repo_root/config/edit-broker-contracts.env"
+_eb_contracts="$_repo/config/edit-broker-contracts.env"
 [ -r "$_eb_contracts" ] || { printf 'error: missing %s\n' "$_eb_contracts" >&2; exit 1; }
 _eb_magic=$(_broker_get_contract_value MAGIC "$_eb_contracts")
 _eb_max=$(_broker_get_contract_value MAX_BROKER_BYTES "$_eb_contracts")
@@ -73,13 +73,6 @@ chmod 755 "$_mockbin"
 # ---- Test framework ----------------------------------------------------------------------
 # _assert_* and _build_edit_test_shim: ./testlib-broker.sh
 # Remaining _assert_* helpers: edit-mode only.
-
-_assert_stderr_excludes() {
-  case "$3" in
-    *"${2}"*) _fail_t "${1}: stderr excludes '${2}'" "got: ${3}" ;;
-    *)        _pass_t "${1}: stderr excludes '${2}'" ;;
-  esac
-}
 
 _assert_pty_prompt_once() {
   if [ "${_pty_prompt_count:-0}" -eq 1 ]; then _pass_t "$1"
@@ -363,7 +356,7 @@ TTYEOF
 # ---- Mock binaries (shared prelude) ---------------------------------------------------
 _MOCKBIN_EDIT_SUITE=full
 # shellcheck source=mock-edit-mode.sh
-. "${_self_dir}/mock-edit-mode.sh"
+. "${_here}/mock-edit-mode.sh"
 
 
 # Minimal broker binary + metadata for bake only (broker IPC lives in broker/tests/broker-integration_test.sh).
@@ -381,7 +374,7 @@ _broker_metadata=$(_compute_metadata "${_mockbin}/edit-broker" 755 stat-ug) || {
 
 # ---- Build shim --------------------------------------------------------------------------
 
-_version=$(cat "${_self_dir}/VERSION" 2>/dev/null) || _version='unknown'
+_version=$(cat "${_here}/VERSION" 2>/dev/null) || _version='unknown'
 _sep=$(printf '\001')
 # Broker client bakes doas -u; mock doas runs as root, so use root here.
 _eb_client="${_tmp}/edit-broker-client.sh"
@@ -390,7 +383,7 @@ sed \
   -e "s${_sep}@EDIT_BROKER_USER@${_sep}root${_sep}" \
   -e "s${_sep}@MAX_BROKER_BYTES@${_sep}${_eb_max}${_sep}" \
   -e "s${_sep}@BROKER_RESPONSE_TIMEOUT_S@${_sep}${_eb_to}${_sep}" \
-  "${_repo_root}/lib/edit-broker-client.sh.in" > "$_eb_client"
+  "${_repo}/lib/edit-broker-client.sh.in" > "$_eb_client"
 _eb_client_meta=$(_compute_metadata "$_eb_client" 644 stat-ug) || {
   printf 'error: could not compute metadata for edit-broker-client.sh\n' >&2
   exit 1

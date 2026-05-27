@@ -136,6 +136,25 @@ _pass_t() { printf 'PASS  %s\n' "$1";     _pass=$(( _pass + 1 )); }
 _fail_t() { printf 'FAIL  %s\n      %s\n' "$1" "$2"; _fail=$(( _fail + 1 )); }
 _skip_t() { printf 'SKIP  %s\n' "$1";     _skip=$(( _skip + 1 )); }
 
+_assert_exit() {
+  if [ "$3" -eq "$2" ]; then _pass_t "${1}: exit ${2}"
+  else _fail_t "${1}: exit ${2}" "got exit ${3}; stderr: ${_err:-<empty>}"; fi
+}
+
+_assert_stderr_contains() {
+  case "$3" in
+    *"${2}"*) _pass_t "${1}: stderr contains '${2}'" ;;
+    *)        _fail_t "${1}: stderr contains '${2}'" "got: ${3}" ;;
+  esac
+}
+
+_assert_stderr_excludes() {
+  case "$3" in
+    *"${2}"*) _fail_t "${1}: stderr excludes '${2}'" "got: ${3}" ;;
+    *)        _pass_t "${1}: stderr excludes '${2}'" ;;
+  esac
+}
+
 _tests_summary() {
   printf '\n%d passed, %d failed, %d skipped\n\n' "$_pass" "$_fail" "$_skip"
   [ "$_fail" -eq 0 ] || exit 1

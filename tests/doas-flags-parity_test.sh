@@ -33,8 +33,8 @@ _skip=0
 
 # ---- Locate source -----------------------------------------------------------------------
 
-_self_dir=$(cd "$(dirname "$0")" && pwd)
-_repo_root=$(CDPATH="" cd -P -- "$_self_dir/.." && pwd)
+_here=$(CDPATH="" cd -P -- "$(dirname "$0")" && pwd)
+_repo=$(CDPATH="" cd -P -- "$_here/.." && pwd)
 
 _built=
 case "${1:-}" in
@@ -44,20 +44,20 @@ case "${1:-}" in
     _built=1
     ;;
   *)
-    _shim_src="${1:-${_repo_root}/doasudo.in}"
+    _shim_src="${1:-${_repo}/doasudo.in}"
     [ -f "$_shim_src" ] || { printf 'error: shim source not found: %s\n' "$_shim_src" >&2; exit 1; }
     ;;
 esac
 
 # shellcheck source=testlib.sh
-. "$_self_dir/testlib.sh"
+. "$_here/testlib.sh"
 # shellcheck source=../utils/metadata-utils.sh
-. "$_repo_root/utils/metadata-utils.sh"
+. "$_repo/utils/metadata-utils.sh"
 
-( [ -f "$_repo_root/lib/shim-utils.sh" ] && [ -f "$_repo_root/lib/edit-broker-client.sh" ] ) \
-  || (cd "$_repo_root" && "${MAKE:-make}" $(_make_s) lib/shim-utils.sh lib/edit-broker-client.sh) \
+( [ -f "$_repo/lib/shim-utils.sh" ] && [ -f "$_repo/lib/edit-broker-client.sh" ] ) \
+  || (cd "$_repo" && "${MAKE:-make}" $(_make_s) lib/shim-utils.sh lib/edit-broker-client.sh) \
   || {
-    printf 'error: run make lib/shim-utils.sh lib/edit-broker-client.sh from %s\n' "$_repo_root" >&2
+    printf 'error: run make lib/shim-utils.sh lib/edit-broker-client.sh from %s\n' "$_repo" >&2
     exit 1
   }
 
@@ -115,16 +115,16 @@ _setup_sha_tool "$_mockbin" "no SHA-256 checksum tool found in $_sys_path" >/dev
   || exit 1
 
 MAKE=${MAKE:-make}
-rm -f "$_repo_root/lib/shim-utils.sh"
-(cd "$_repo_root" && "$MAKE" $(_make_s) lib/shim-utils.sh SHIM_PATH="${_mockbin}:${_sys_path}") \
+rm -f "$_repo/lib/shim-utils.sh"
+(cd "$_repo" && "$MAKE" $(_make_s) lib/shim-utils.sh SHIM_PATH="${_mockbin}:${_sys_path}") \
   || { printf 'error: make lib/shim-utils.sh failed\n' >&2; exit 1; }
 
-_utils_meta=$(_compute_metadata "$_repo_root/lib/shim-utils.sh" 644 stat-ug) \
+_utils_meta=$(_compute_metadata "$_repo/lib/shim-utils.sh" 644 stat-ug) \
   || {
     printf 'error: could not compute UTILS_METADATA for lib/shim-utils.sh\n' >&2
     exit 1
   }
-_eb_client_meta=$(_compute_metadata "$_repo_root/lib/edit-broker-client.sh" 644 stat-ug) \
+_eb_client_meta=$(_compute_metadata "$_repo/lib/edit-broker-client.sh" 644 stat-ug) \
   || {
     printf 'error: could not compute metadata for lib/edit-broker-client.sh\n' >&2
     exit 1
@@ -139,10 +139,10 @@ if [ -n "$_built" ]; then
   chmod +x "${_tmp}/sudo"
   _shim="${_tmp}/sudo"
 else
-  _version=$(cat "${_self_dir}/VERSION" 2>/dev/null) || _version='unknown'
-  _build_test_shim "$_repo_root" "$_shim_src" "$_shim" "${_mockbin}:${_sys_path}" \
-    "$_utils_meta" "$_version" "${_repo_root}/lib/shim-utils.sh" \
-    "${_repo_root}/lib/edit-broker-client.sh" "$_eb_client_meta" \
+  _version=$(cat "${_here}/VERSION" 2>/dev/null) || _version='unknown'
+  _build_test_shim "$_repo" "$_shim_src" "$_shim" "${_mockbin}:${_sys_path}" \
+    "$_utils_meta" "$_version" "${_repo}/lib/shim-utils.sh" \
+    "${_repo}/lib/edit-broker-client.sh" "$_eb_client_meta" \
     "${_mockbin}/edit-broker" "" \
     || exit 1
   chmod +x "$_shim"

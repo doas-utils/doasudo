@@ -17,8 +17,8 @@ _fail=0
 _skip=0
 
 _here=$(CDPATH="" cd -P -- "$(dirname -- "$0")" && pwd)
-_repo_root=$(CDPATH="" cd -P -- "$_here/../.." && pwd)
-_tests_dir="$_repo_root/tests"
+_repo=$(CDPATH="" cd -P -- "$_here/../.." && pwd)
+_tests_dir="$_repo/tests"
 _shim_src="${1:-${_tests_dir}/doasudo.in}"
 [ -f "$_shim_src" ] || {
   printf 'error: shim source not found: %s\n' "$_shim_src" >&2
@@ -28,11 +28,11 @@ _shim_src="${1:-${_tests_dir}/doasudo.in}"
 # shellcheck source=../../tests/testlib.sh
 . "$_tests_dir/testlib.sh"
 # shellcheck source=../../utils/metadata-utils.sh
-. "$_repo_root/utils/metadata-utils.sh"
+. "$_repo/utils/metadata-utils.sh"
 # shellcheck source=../../tests/testlib-broker.sh
 . "$_tests_dir/testlib-broker.sh"
 
-_eb_contracts="$_repo_root/config/edit-broker-contracts.env"
+_eb_contracts="$_repo/config/edit-broker-contracts.env"
 [ -r "$_eb_contracts" ] || {
   printf 'error: missing %s\n' "$_eb_contracts" >&2
   exit 1
@@ -161,7 +161,7 @@ sed \
   -e "s${_sep}@EDIT_BROKER_USER@${_sep}root${_sep}" \
   -e "s${_sep}@MAX_BROKER_BYTES@${_sep}${_eb_max}${_sep}" \
   -e "s${_sep}@BROKER_RESPONSE_TIMEOUT_S@${_sep}${_eb_to}${_sep}" \
-  "${_repo_root}/lib/edit-broker-client.sh.in" > "$_eb_client"
+  "${_repo}/lib/edit-broker-client.sh.in" > "$_eb_client"
 _eb_client_meta=$(_compute_metadata "$_eb_client" 644 stat-ug) || {
   printf 'error: could not compute metadata for edit-broker-client.sh\n' >&2
   exit 1

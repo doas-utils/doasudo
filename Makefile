@@ -358,6 +358,7 @@ check-src: lib/shim-utils.sh lib/edit-broker-client.sh broker/edit-broker.sh
   @printf '\n'
   sh tests/doas-flags-parity_test.sh doasudo.in
   sh tests/parser_test.sh doasudo.in
+  sh tests/edit-mode-parser_test.sh doasudo.in
   sh tests/edit-mode_test.sh doasudo.in
   sh broker/tests/broker-contracts_test.sh
   sh broker/tests/allowlist-parse_test.sh
@@ -400,10 +401,13 @@ shellcheck: broker/edit-broker.sh lib/shim-utils.sh lib/edit-broker-client.sh
   shellcheck -s sh packaging/post-install.sh
   shellcheck -s sh utils/metadata-utils.sh
   shellcheck -s sh tests/testlib.sh
+  shellcheck -s sh tests/testlib-parser.sh
   shellcheck -s sh tests/testlib-broker.sh
   shellcheck -s sh tests/mock-edit-mode.sh
   shellcheck -s sh tests/bsd/anyvm.sh
   shellcheck -s sh tests/bsd/runner.sh
+  shellcheck -s sh -x tests/parser_test.sh
+  shellcheck -s sh -x tests/edit-mode-parser_test.sh
   shellcheck -s sh tests/stale-metadata_test.sh
   cd "$(CURDIR)/broker" && shellcheck -s sh -x edit-broker.sh
   shellcheck -s sh -x broker/tests/test-driver.sh

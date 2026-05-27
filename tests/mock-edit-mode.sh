@@ -3,13 +3,13 @@
 #
 # Shared mockbin prelude for sudoedit harnesses. SOURCED, not executed.
 #
-# Preconditions: _repo_root _mockbin _tmp; tests/testlib.sh + utils/metadata-utils.sh sourced.
+# Preconditions: _repo _mockbin _tmp; tests/testlib.sh + utils/metadata-utils.sh sourced.
 # Control: _MOCKBIN_EDIT_SUITE — full | broker (default: full).
 #   full  — editors + less/more (edit-mode_test.sh)
 #   broker — editor_modify only + core tools (broker-integration_test.sh)
 
 # shellcheck shell=sh disable=SC2154
-# _repo_root _mockbin _tmp set by sourcing harness.
+# _repo _mockbin _tmp set by sourcing harness.
 
 : "${_MOCKBIN_EDIT_SUITE:=full}"
 
@@ -203,12 +203,12 @@ _setup_sha_tool "$_mockbin" "no SHA-256 checksum tool found in $_sys_path" >/dev
 _mock_sha_tool="${_mockbin}/${_SHA_KIND}"
 
 MAKE=${MAKE:-make}
-rm -f "${_repo_root}/lib/shim-utils.sh"
+rm -f "${_repo}/lib/shim-utils.sh"
 # shellcheck disable=SC2046
-(cd "$_repo_root" && "$MAKE" $(_make_s) lib/shim-utils.sh lib/edit-broker-client.sh SHIM_PATH="${_mockbin}:${_sys_path}") \
+(cd "$_repo" && "$MAKE" $(_make_s) lib/shim-utils.sh lib/edit-broker-client.sh SHIM_PATH="${_mockbin}:${_sys_path}") \
   || { printf 'error: make lib/shim-utils.sh lib/edit-broker-client.sh failed\n' >&2; exit 1; }
 
-_utils_utils_path="${_repo_root}/lib/shim-utils.sh"
+_utils_utils_path="${_repo}/lib/shim-utils.sh"
 _utils_metadata=$(_compute_metadata "$_utils_utils_path" 644 stat-ug) || {
   printf 'error: could not compute metadata for lib/shim-utils.sh\n' >&2
   exit 1

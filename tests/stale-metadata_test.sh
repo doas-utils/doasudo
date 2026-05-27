@@ -10,11 +10,11 @@
 
 set -eu
 
-_root=$(CDPATH="" cd -P -- "$(dirname -- "$0")/.." && pwd)
-cd "$_root"
+_repo=$(CDPATH="" cd -P -- "$(dirname -- "$0")/.." && pwd)
+cd "$_repo"
 MAKE=${MAKE:-make}
 # shellcheck source=tests/testlib.sh disable=SC1091
-. "$_root/tests/testlib.sh"
+. "$_repo/tests/testlib.sh"
 
 fail() {
   printf 'FAIL stale-metadata_test: %s\n' "$1" >&2
@@ -22,11 +22,11 @@ fail() {
 }
 
 # shellcheck disable=SC1091
-. "$_root/utils/metadata-utils.sh"
+. "$_repo/utils/metadata-utils.sh"
 _pick_sha_tool || fail 'no sha256sum / sha256 / shasum'
 
 _meta_from_shim() {
-  sed -n "s/^_SHIM_UTILS_METADATA='\\([^']*\\)'$/\\1/p" "$_root/doasudo" | head -n1
+  sed -n "s/^_SHIM_UTILS_METADATA='\\([^']*\\)'$/\\1/p" "$_repo/doasudo" | head -n1
 }
 
 # Prior tests leave lib/shim-utils.sh newer than .in but still mock-embedded; without
@@ -34,9 +34,9 @@ _meta_from_shim() {
 # shellcheck disable=SC2046
 "$MAKE" $(_make_s) -B lib/shim-utils.sh doasudo \
   || fail 'release lib/shim build failed'
-[ -f "$_root/doasudo" ] || fail 'doasudo missing'
+[ -f "$_repo/doasudo" ] || fail 'doasudo missing'
 
-want_rel=$(_compute_metadata "$_root/lib/shim-utils.sh" 644) \
+want_rel=$(_compute_metadata "$_repo/lib/shim-utils.sh" 644) \
   || fail '_compute_metadata release failed'
 got=$(_meta_from_shim)
 [ -n "$got" ] || fail 'empty _SHIM_UTILS_METADATA in shim'
@@ -52,13 +52,13 @@ trap _cleanup EXIT
 
 # Same pattern as doas-flags-parity / parser / edit-mode: rm forces regen; Makefile
 # does not list SHIM_PATH as a prerequisite, so plain `make` would skip rewrite.
-rm -f "$_root/lib/shim-utils.sh"
+rm -f "$_repo/lib/shim-utils.sh"
 # shellcheck disable=SC2046
 "$MAKE" $(_make_s) lib/shim-utils.sh \
   "SHIM_PATH=${_mroot}/mockbin:/usr/bin:/bin:/usr/sbin:/sbin" \
   || fail 'mock lib/shim-utils.sh rebuild failed'
 
-want_mock=$(_compute_metadata "$_root/lib/shim-utils.sh" 644) \
+want_mock=$(_compute_metadata "$_repo/lib/shim-utils.sh" 644) \
   || fail '_compute_metadata mock failed'
 [ "$want_mock" != "$want_rel" ] \
   || fail 'mock SHIM_PATH did not change lib/shim-utils.sh digest (unexpected)'
@@ -72,7 +72,7 @@ got=$(_meta_from_shim)
 # shellcheck disable=SC2046
 "$MAKE" $(_make_s) -B lib/shim-utils.sh doasudo || fail 'repair make failed'
 
-want_fin=$(_compute_metadata "$_root/lib/shim-utils.sh" 644) \
+want_fin=$(_compute_metadata "$_repo/lib/shim-utils.sh" 644) \
   || fail '_compute_metadata after repair failed'
 got=$(_meta_from_shim)
 [ "$got" = "$want_fin" ] || fail "after repair, bake still wrong (got=$got want=$want_fin)"
