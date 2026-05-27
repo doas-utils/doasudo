@@ -1,4 +1,4 @@
 .git
 *.swp
 *~
-doas-sudo-shim
+doasudo
