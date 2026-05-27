@@ -17,6 +17,7 @@ _version=
 _shim_utils=
 _edit_broker_client=
 _edit_broker_client_metadata=
+_edit_mode=
 _drop_setuid_guard=0
 _stub_edit_mode_root_guard=0
 _stub_check_path_walk=0
@@ -33,6 +34,7 @@ while [ "$#" -gt 0 ]; do
     --shim-utils) _shim_utils="${2:-}"; shift 2 ;;
     --edit-broker-client) _edit_broker_client="${2:-}"; shift 2 ;;
     --edit-broker-client-metadata) _edit_broker_client_metadata="${2:-}"; shift 2 ;;
+    --edit-mode) _edit_mode="${2:-}"; shift 2 ;;
     --drop-setuid-guard) _drop_setuid_guard=1; shift ;;
     --stub-edit-mode-root-guard) _stub_edit_mode_root_guard=1; shift ;;
     --stub-check-path-walk) _stub_check_path_walk=1; shift ;;
@@ -54,11 +56,13 @@ _miss=
 [ -n "$_shim_utils" ] || _miss=shim-utils
 [ -n "$_edit_broker_client" ] || _miss=edit-broker-client
 [ -n "$_edit_broker_client_metadata" ] || _miss=edit-broker-client-metadata
+[ -n "$_edit_mode" ] || _miss=edit-mode
 [ -z "${_miss:-}" ] || {
   printf 'error: --%s is required\n' "$_miss" >&2
   exit 1
 }
 [ -f "$_in" ] || { printf 'error: input not found: %s\n' "$_in" >&2; exit 1; }
+[ -f "$_edit_mode" ] || { printf 'error: edit-mode not found: %s\n' "$_edit_mode" >&2; exit 1; }
 
 _marker_count=$(grep -c '^# @EDIT_BROKER_METADATA@$' "$_in" || true)
 [ "$_marker_count" -eq 1 ] || {
@@ -66,11 +70,18 @@ _marker_count=$(grep -c '^# @EDIT_BROKER_METADATA@$' "$_in" || true)
   exit 1
 }
 
+_include_marker_count=$(grep -c '^# @EDIT_MODE_BLOCK@$' "$_in" || true)
+[ "$_include_marker_count" -eq 1 ] || {
+  printf 'error: expected exactly one # @EDIT_MODE_BLOCK@ marker in %s\n' "$_in" >&2
+  exit 1
+}
+
 _sep=$(printf '\001')
 
 # Broker values are single-quoted like the Makefile bake; embedded "'" would break.
 _vars_file=$(mktemp "${TMPDIR:-/tmp}/edit-broker-vars.XXXXXX")
-trap 'rm -f "$_vars_file"' EXIT INT HUP TERM
+_edit_mode_processed=$(mktemp "${TMPDIR:-/tmp}/edit-mode-processed.XXXXXX")
+trap 'rm -f "$_vars_file" "$_edit_mode_processed"' EXIT INT HUP TERM
 cat > "$_vars_file" <<EOF
 _EDIT_BROKER_CLIENT='${_edit_broker_client}'
 _EDIT_BROKER_CLIENT_METADATA='${_edit_broker_client_metadata}'
@@ -78,7 +89,32 @@ _EDIT_BROKER_PATH='${_edit_broker_path}'
 _EDIT_BROKER_METADATA='${_edit_broker_metadata}'
 EOF
 
+# Edit-mode helpers now live in edit-mode.sh; sed `r` reads its content as raw
+# bytes and appends after the current cycle, so subsequent `-e` commands
+# cannot transform the embedded text. Apply --stub-* substitutions to a
+# preprocessed copy of edit-mode.sh, then `r` that.
+set --
+if [ "$_stub_edit_mode_root_guard" -eq 1 ]; then
+  set -- "$@" -e '/^_edit_mode_root_guard() {$/,/^}$/c\
+_edit_mode_root_guard() { :; }\
+'
+fi
+if [ "$_stub_check_path_walk" -eq 1 ]; then
+  set -- "$@" -e '/^_check_path_walk() {$/,/^}$/c\
+_check_path_walk() { :; }\
+'
+fi
+if [ "$#" -gt 0 ]; then
+  sed "$@" "$_edit_mode" > "$_edit_mode_processed"
+else
+  cp "$_edit_mode" "$_edit_mode_processed"
+fi
+
 set -- \
+  -e '/^# @EDIT_MODE_BLOCK@$/{' \
+  -e "  r ${_edit_mode_processed}" \
+  -e '  d' \
+  -e '}' \
   -e "s${_sep}@BINDIR@${_sep}${_bindir}${_sep}" \
   -e "s${_sep}@UTILS_METADATA@${_sep}${_utils_metadata}${_sep}" \
   -e "s${_sep}@VERSION@${_sep}${_version}${_sep}" \
@@ -91,20 +127,15 @@ set -- \
 if [ "$_drop_setuid_guard" -eq 1 ]; then
   set -- "$@" -e '/\[ -u "\$_DOAS" \]/d'
 fi
-if [ "$_stub_edit_mode_root_guard" -eq 1 ]; then
-  set -- "$@" -e '/^_edit_mode_root_guard() {$/,/^}$/c\
-_edit_mode_root_guard() { :; }\
-'
-fi
-if [ "$_stub_check_path_walk" -eq 1 ]; then
-  set -- "$@" -e '/^_check_path_walk() {$/,/^}$/c\
-_check_path_walk() { :; }\
-'
-fi
 
 sed "$@" "$_in" > "$_out"
 
 if grep -q '@EDIT_BROKER_METADATA@' "$_out"; then
+  printf 'error: marker substitution failed in %s\n' "$_out" >&2
+  rm -f "$_out"
+  exit 1
+fi
+if grep -q '@EDIT_MODE_BLOCK@' "$_out"; then
   printf 'error: marker substitution failed in %s\n' "$_out" >&2
   rm -f "$_out"
   exit 1

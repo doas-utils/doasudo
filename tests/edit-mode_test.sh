@@ -158,7 +158,9 @@ _without_tty() {
   mv "${_tmp}/tty.bak.$$" "${_mockbin}/tty"
 }
 
-# $1 = outfile: verbatim write-back sh -c body from $_shim_src (for replay tests).
+# $1 = outfile: verbatim write-back sh -c body from edit-mode.sh (for replay tests).
+# Edit-mode helpers were lifted from doasudo.in into edit-mode.sh; the fragment
+# is now read from the lifted source.
 _write_wb_fragment_from_shim() {
   _out=$1
   awk '
@@ -168,9 +170,9 @@ _write_wb_fragment_from_shim() {
       sub(/^    /, "", $0)
       print
     }
-  ' "$_shim_src" > "$_out"
+  ' "$_repo/edit-mode.sh" > "$_out"
   [ -s "$_out" ] || {
-    printf 'error: failed to extract write-back fragment from %s\n' "$_shim_src" >&2
+    printf 'error: failed to extract write-back fragment from %s\n' "$_repo/edit-mode.sh" >&2
     exit 1
   }
 }
@@ -224,7 +226,7 @@ _run_editor_attack() {
   _run_capture_streams env SUDO_EDITOR="${_mockbin}/editor_attack" EDITOR_ATTACK_MODE="$_ra_mode" "$@" "$_shim" -e "$_ra_file"
 }
 
-# Sets _WB_EXIT_* from the shim "# Exit codes:" table (defaults if absent).
+# Sets _WB_EXIT_* from the "# Exit codes:" table in edit-mode.sh (defaults if absent).
 _define_wb_exit_codes_from_shim() {
   eval "$(awk '
     /^    # Exit codes:/ { inblk=1; next }
@@ -237,7 +239,7 @@ _define_wb_exit_codes_from_shim() {
         printf "_WB_EXIT_%s=%s\n", code, code
       }
     }
-  ' "$_shim_src")"
+  ' "$_repo/edit-mode.sh")"
   : "${_WB_EXIT_0:=0}"
   : "${_WB_EXIT_1:=1}"
 }

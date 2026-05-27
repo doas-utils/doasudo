@@ -192,8 +192,18 @@ lib/edit-broker-client.sh: lib/edit-broker-client.sh.in Makefile $(EDIT_BROKER_C
 #
 # Makefile is a prerequisite so SHIM_PATH (and other make-vars) edits rebuild
 # the binary; otherwise the target timestamp can look fresh while baked paths rot.
-doasudo: doasudo.in VERSION Makefile lib/shim-utils.sh lib/edit-broker-client.sh broker/edit-broker.sh
+#
+# edit-mode.sh trailing newline is load-bearing: sed `r` reads the file as-is, so
+# a missing final \n would concatenate its last line with the line of
+# doasudo.in following the marker. Fail loudly if absent.
+doasudo: doasudo.in VERSION Makefile lib/shim-utils.sh lib/edit-broker-client.sh broker/edit-broker.sh edit-mode.sh
+  @[ -z "$$(tail -c1 edit-mode.sh | tr -d '\n')" ] \
+    || { printf 'error: edit-mode.sh missing trailing newline\n' >&2; exit 1; }
   sed \
+    -e '/^# @EDIT_MODE_BLOCK@$$/{' \
+    -e '  r edit-mode.sh' \
+    -e '  d' \
+    -e '}' \
     $(call _sed_entry,BINDIR,$(SHIM_PATH)) \
     -e '/^# @EDIT_BROKER_METADATA@$$/c\
 _EDIT_BROKER_CLIENT='\''$(EDIT_BROKER_CLIENT)'\''\
@@ -204,7 +214,7 @@ _EDIT_BROKER_METADATA='\''$(EDIT_BROKER_METADATA)'\''' \
     $(call _sed_entry,VERSION,$(VERSION)) \
     $(call _sed_entry,SHIM_UTILS,$(SHIM_UTILS)) \
     $< > $@
-  $(call _verify_no_unsubst,$@,@BINDIR@|@UTILS_METADATA@|@VERSION@|@SHIM_UTILS@|@EDIT_BROKER_METADATA@)
+  $(call _verify_no_unsubst,$@,@BINDIR@|@UTILS_METADATA@|@VERSION@|@SHIM_UTILS@|@EDIT_BROKER_METADATA@|@EDIT_MODE_BLOCK@)
 
 # Edit broker: sed same @...@ tokens as the shim (@BINDIR@ = SHIM_PATH).
 broker/edit-broker.sh: broker/edit-broker.sh.in Makefile $(EDIT_BROKER_CONTRACTS_ENV) lib/shim-utils.sh broker/allowlist-parse.awk
@@ -394,11 +404,18 @@ check-all: shellcheck check
 
 # POSIX sh: doasudo.in, lib/, broker/, packaging/, tests as listed below.
 # CI: .github/workflows/ci.yml.
+#
+# doasudo.in alone references edit-mode helpers defined in edit-mode.sh; `-x`
+# source-following can no longer resolve them, so the standalone lint runs
+# without `-x` and the built `doasudo` binary (edit-mode.sh embedded) gets a
+# separate lint where the cross-file references resolve.
 .PHONY: shellcheck
-shellcheck: broker/edit-broker.sh lib/shim-utils.sh lib/edit-broker-client.sh
+shellcheck: broker/edit-broker.sh lib/shim-utils.sh lib/edit-broker-client.sh doasudo
   shellcheck -s sh lib/shim-utils.sh
   shellcheck -s sh lib/edit-broker-client.sh
-  shellcheck -s sh -x doasudo.in
+  shellcheck -s sh doasudo.in
+  shellcheck -s sh edit-mode.sh
+  shellcheck -s sh doasudo
   shellcheck -s sh packaging/post-install.sh
   shellcheck -s sh utils/metadata-utils.sh
   shellcheck -s sh tests/testlib.sh

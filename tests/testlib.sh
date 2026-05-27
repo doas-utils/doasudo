@@ -60,6 +60,7 @@ _build_test_shim() {
     --shim-utils "$_su" \
     --edit-broker-client "$_ebc" \
     --edit-broker-client-metadata "$_ebcm" \
+    --edit-mode "$_r/edit-mode.sh" \
     --drop-setuid-guard \
     "$@"
 }
