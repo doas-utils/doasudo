@@ -43,28 +43,50 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-[ -n "$_in" ] || { printf 'error: --input is required\n' >&2; exit 1; }
-[ -n "$_out" ] || { printf 'error: --output is required\n' >&2; exit 1; }
-[ -n "$_bindir" ] || { printf 'error: --bindir is required\n' >&2; exit 1; }
-[ -n "$_edit_broker_path" ] || { printf 'error: --edit-broker-path is required\n' >&2; exit 1; }
-[ -n "$_utils_metadata" ] || { printf 'error: --utils-metadata is required\n' >&2; exit 1; }
-[ -n "$_version" ] || { printf 'error: --version is required\n' >&2; exit 1; }
-[ -n "$_shim_utils" ] || { printf 'error: --shim-utils is required\n' >&2; exit 1; }
-[ -n "$_edit_broker_client" ] || { printf 'error: --edit-broker-client is required\n' >&2; exit 1; }
-[ -n "$_edit_broker_client_metadata" ] || { printf 'error: --edit-broker-client-metadata is required\n' >&2; exit 1; }
+_miss=
+[ -n "$_in" ] || _miss=input
+[ -n "$_out" ] || _miss=output
+[ -n "$_bindir" ] || _miss=bindir
+[ -n "$_edit_broker_path" ] || _miss=edit-broker-path
+[ -n "$_edit_broker_metadata" ] || _miss=edit-broker-metadata
+[ -n "$_utils_metadata" ] || _miss=utils-metadata
+[ -n "$_version" ] || _miss=version
+[ -n "$_shim_utils" ] || _miss=shim-utils
+[ -n "$_edit_broker_client" ] || _miss=edit-broker-client
+[ -n "$_edit_broker_client_metadata" ] || _miss=edit-broker-client-metadata
+[ -z "${_miss:-}" ] || {
+  printf 'error: --%s is required\n' "$_miss" >&2
+  exit 1
+}
 [ -f "$_in" ] || { printf 'error: input not found: %s\n' "$_in" >&2; exit 1; }
+
+_marker_count=$(grep -c '^# @EDIT_BROKER_METADATA@$' "$_in" || true)
+[ "$_marker_count" -eq 1 ] || {
+  printf 'error: expected exactly one # @EDIT_BROKER_METADATA@ marker in %s\n' "$_in" >&2
+  exit 1
+}
 
 _sep=$(printf '\001')
 
+# Broker values are single-quoted like the Makefile bake; embedded "'" would break.
+_vars_file=$(mktemp "${TMPDIR:-/tmp}/edit-broker-vars.XXXXXX")
+trap 'rm -f "$_vars_file"' EXIT INT HUP TERM
+cat > "$_vars_file" <<EOF
+_EDIT_BROKER_CLIENT='${_edit_broker_client}'
+_EDIT_BROKER_CLIENT_METADATA='${_edit_broker_client_metadata}'
+_EDIT_BROKER_PATH='${_edit_broker_path}'
+_EDIT_BROKER_METADATA='${_edit_broker_metadata}'
+EOF
+
 set -- \
   -e "s${_sep}@BINDIR@${_sep}${_bindir}${_sep}" \
-  -e "s${_sep}@EDIT_BROKER_PATH@${_sep}${_edit_broker_path}${_sep}" \
-  -e "s${_sep}@EDIT_BROKER_METADATA@${_sep}${_edit_broker_metadata}${_sep}" \
   -e "s${_sep}@UTILS_METADATA@${_sep}${_utils_metadata}${_sep}" \
   -e "s${_sep}@VERSION@${_sep}${_version}${_sep}" \
   -e "s${_sep}@SHIM_UTILS@${_sep}${_shim_utils}${_sep}" \
-  -e "s${_sep}@EDIT_BROKER_CLIENT@${_sep}${_edit_broker_client}${_sep}" \
-  -e "s${_sep}@EDIT_BROKER_CLIENT_METADATA@${_sep}${_edit_broker_client_metadata}${_sep}"
+  -e '/^# @EDIT_BROKER_METADATA@$/{' \
+  -e "  r ${_vars_file}" \
+  -e '  d' \
+  -e '}'
 
 if [ "$_drop_setuid_guard" -eq 1 ]; then
   set -- "$@" -e '/\[ -u "\$_DOAS" \]/d'
@@ -81,3 +103,9 @@ _check_path_walk() { :; }\
 fi
 
 sed "$@" "$_in" > "$_out"
+
+if grep -q '@EDIT_BROKER_METADATA@' "$_out"; then
+  printf 'error: marker substitution failed in %s\n' "$_out" >&2
+  rm -f "$_out"
+  exit 1
+fi

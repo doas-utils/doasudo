@@ -195,15 +195,16 @@ lib/edit-broker-client.sh: lib/edit-broker-client.sh.in Makefile $(EDIT_BROKER_C
 doasudo: doasudo.in VERSION Makefile lib/shim-utils.sh lib/edit-broker-client.sh broker/edit-broker.sh
   sed \
     $(call _sed_entry,BINDIR,$(SHIM_PATH)) \
-    $(call _sed_entry,EDIT_BROKER_PATH,$(EDIT_BROKER_PATH)) \
-    $(call _sed_entry,EDIT_BROKER_METADATA,$(EDIT_BROKER_METADATA)) \
+    -e '/^# @EDIT_BROKER_METADATA@$$/c\
+_EDIT_BROKER_CLIENT='\''$(EDIT_BROKER_CLIENT)'\''\
+_EDIT_BROKER_CLIENT_METADATA='\''$(EDIT_BROKER_CLIENT_METADATA)'\''\
+_EDIT_BROKER_PATH='\''$(EDIT_BROKER_PATH)'\''\
+_EDIT_BROKER_METADATA='\''$(EDIT_BROKER_METADATA)'\''' \
     $(call _sed_entry,UTILS_METADATA,$(UTILS_METADATA)) \
     $(call _sed_entry,VERSION,$(VERSION)) \
     $(call _sed_entry,SHIM_UTILS,$(SHIM_UTILS)) \
-    $(call _sed_entry,EDIT_BROKER_CLIENT,$(EDIT_BROKER_CLIENT)) \
-    $(call _sed_entry,EDIT_BROKER_CLIENT_METADATA,$(EDIT_BROKER_CLIENT_METADATA)) \
     $< > $@
-  $(call _verify_no_unsubst,$@,@BINDIR@|@EDIT_BROKER_PATH@|@EDIT_BROKER_METADATA@|@UTILS_METADATA@|@VERSION@|@SHIM_UTILS@|@EDIT_BROKER_CLIENT@|@EDIT_BROKER_CLIENT_METADATA@)
+  $(call _verify_no_unsubst,$@,@BINDIR@|@UTILS_METADATA@|@VERSION@|@SHIM_UTILS@|@EDIT_BROKER_METADATA@)
 
 # Edit broker: sed same @...@ tokens as the shim (@BINDIR@ = SHIM_PATH).
 broker/edit-broker.sh: broker/edit-broker.sh.in Makefile $(EDIT_BROKER_CONTRACTS_ENV) lib/shim-utils.sh broker/allowlist-parse.awk

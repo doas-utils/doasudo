@@ -102,6 +102,13 @@ exit 0
 EOF
 chmod +x "${_mockbin}/true"
 
+# Stub broker path + metadata for shim bake (parity test never runs broker IPC).
+cat > "${_mockbin}/edit-broker" << 'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod 755 "${_mockbin}/edit-broker"
+
 # Symlink real id, awk, stat, cat, tee, mv, chmod, rm, tty (and optional getent).
 # Write-back runs, but mock doas exits 0 before /bin/sh -c side effects.
 # _sys_path mirrors the non-mock SHIM_PATH tail, so _resolve_bin sees shim-like tools.
@@ -129,6 +136,11 @@ _eb_client_meta=$(_compute_metadata "$_repo/lib/edit-broker-client.sh" 644 stat-
     printf 'error: could not compute metadata for lib/edit-broker-client.sh\n' >&2
     exit 1
   }
+_broker_shim_meta=$(_compute_metadata "${_mockbin}/edit-broker" 755 stat-ug) \
+  || {
+    printf 'error: could not compute metadata for mock edit-broker\n' >&2
+    exit 1
+  }
 
 # ---- Build shim --------------------------------------------------------------------------
 # sed @BINDIR@ in-tree so each run bakes the current _mockbin.
@@ -143,7 +155,7 @@ else
   _build_test_shim "$_repo" "$_shim_src" "$_shim" "${_mockbin}:${_sys_path}" \
     "$_utils_meta" "$_version" "${_repo}/lib/shim-utils.sh" \
     "${_repo}/lib/edit-broker-client.sh" "$_eb_client_meta" \
-    "${_mockbin}/edit-broker" "" \
+    "${_mockbin}/edit-broker" "${_broker_shim_meta}" \
     || exit 1
   chmod +x "$_shim"
 fi

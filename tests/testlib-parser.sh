@@ -119,6 +119,17 @@ exit 0
 EOF
   chmod +x "${_mockbin}/editor"
 
+  # Stub broker path + metadata for shim bake (parser tests never run broker IPC).
+  cat > "${_mockbin}/edit-broker" << 'EOF'
+#!/bin/sh
+exit 0
+EOF
+  chmod 755 "${_mockbin}/edit-broker"
+  _eb_broker_meta=$(_compute_metadata "${_mockbin}/edit-broker" 755 stat-ug) || {
+    printf 'error: could not compute metadata for mock edit-broker\n' >&2
+    exit 1
+  }
+
   # Mock editor_empty: truncates file after a delay (triggers write-back).
   cat > "${_mockbin}/editor_empty" << 'EOF'
 #!/bin/sh
@@ -210,7 +221,7 @@ _parser_build_shim() {
   shift 4
   _build_test_shim "$_repo" "$_shim_src" "$_pbs_out" "$_pbs_bindir" "$_pbs_um" \
     "$_version" "$_pbs_su" "${_repo}/lib/edit-broker-client.sh" "$_eb_client_meta" \
-    "${_mockbin}/edit-broker" "" \
+    "${_mockbin}/edit-broker" "${_eb_broker_meta}" \
     "$@" || return
   chmod +x "$_pbs_out"
 }
