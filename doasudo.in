@@ -178,6 +178,8 @@ EOF
   esac
 }
 
+_edit_mode_help() { die "edit mode is not built into this doasudo"; }
+
 # ---- Helpers -----------------------------------------------------------------------------
 
 warn()  { printf 'sudo: warning: %s\n' "$*" >&2; }
@@ -402,6 +404,7 @@ _exec_login_shell() {
   fi
 }
 
+_run_edit_mode() { _edit_mode_help; }
 # @EDIT_MODE_BLOCK@
 
 # ---- Pre-parse short-circuit -------------------------------------------------------------
@@ -769,31 +772,33 @@ fi
 
 # ---- Dispatch ----------------------------------------------------------------------------
 
-# VAR=value tokens stripped by the parser cannot reach here via normal
-# dispatch; tokens after -- can. Real sudo would exec "VAR=value" and
-# fail with "command not found"; reject explicitly for a clearer diagnostic.
-case "${1:-}" in
-  *=*) die "cannot use a variable assignment as a command name: '$1'" ;;
-esac
+if [ -z "${flag_e:-}" ]; then
+  # VAR=value tokens stripped by the parser cannot reach here via normal
+  # dispatch; tokens after -- can. Real sudo would exec "VAR=value" and
+  # fail with "command not found"; reject explicitly for a clearer diagnostic.
+  case "${1:-}" in
+    *=*) die "cannot use a variable assignment as a command name: '$1'" ;;
+  esac
 
-if [ "${flag_i:-}" ]; then
-  _exec_login_shell "$@"
-elif [ "${flag_s:-}" ]; then
-  # -s uses the invoking user's shell, not the target's ($SHELL first,
-  # then passwd). Contrast -i, which uses the target's login shell.
-  # No newline check: $_shell is a quoted argument to _doas_exec; a
-  # newline causes doas to reject the path rather than silently misbehave.
-  _shell="${SHELL:-$(_user_shell "$SUDO_USER")}"
-  case "$_shell" in /*) ;; *) die "invalid shell in \$SHELL: '${_shell}'" ;; esac
-  if [ $# -eq 0 ]; then
-    _doas_exec "$_shell"
+  if [ "${flag_i:-}" ]; then
+    _exec_login_shell "$@"
+  elif [ "${flag_s:-}" ]; then
+    # -s uses the invoking user's shell, not the target's ($SHELL first,
+    # then passwd). Contrast -i, which uses the target's login shell.
+    # No newline check: $_shell is a quoted argument to _doas_exec; a
+    # newline causes doas to reject the path rather than silently misbehave.
+    _shell="${SHELL:-$(_user_shell "$SUDO_USER")}"
+    case "$_shell" in /*) ;; *) die "invalid shell in \$SHELL: '${_shell}'" ;; esac
+    if [ $# -eq 0 ]; then
+      _doas_exec "$_shell"
+    else
+      _cmd=$(_join_args "$@")
+      _doas_exec "$_shell" -c "$_cmd"
+    fi
+  elif [ $# -eq 0 ]; then
+    die "no command specified"
   else
-    _cmd=$(_join_args "$@")
-    _doas_exec "$_shell" -c "$_cmd"
+    # -- was consumed by the parser; _doas_exec must never receive a bare --.
+    _doas_exec "$@"
   fi
-elif [ $# -eq 0 ]; then
-  die "no command specified"
-else
-  # -- was consumed by the parser; _doas_exec must never receive a bare --.
-  _doas_exec "$@"
 fi

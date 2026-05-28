@@ -20,12 +20,13 @@ jobs:
         run: make shellcheck
 
   native-check:
-    name: Native ${{ matrix.make_bin }} (${{ matrix.os }})
+    name: Native ${{ matrix.make_bin }} EDIT_MODE=${{ matrix.edit_mode }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
+        edit_mode: [0, 1]
         include:
           - os: ubuntu-latest
             make_bin: make
@@ -76,8 +77,8 @@ jobs:
           sudo chmod 600 /opt/local/etc/doas.conf
           sudo ln -sf /bin/dash /var/select/sh
 
-      - name: Run tests (${{ matrix.make_bin }})
-        run: ${{ matrix.make_bin }} check-all
+      - name: Run tests (${{ matrix.make_bin }} EDIT_MODE=${{ matrix.edit_mode }})
+        run: ${{ matrix.make_bin }} EDIT_MODE=${{ matrix.edit_mode }} check-all
 
   docker-test:
     name: Docker ${{ matrix.name }} (user check + doas install in image)

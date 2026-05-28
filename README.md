@@ -55,6 +55,8 @@ exec /usr/bin/vim -u NONE "$@"
 
 Then set `SUDO_EDITOR=/usr/local/bin/vim-sudoedit`. See `sudo --help`.
 
+Edit mode can be opted out at build time (see [Installation](#installation)).
+
 ### `editas`
 
 The shim installs `editas` alongside `sudoedit`. The name `doasedit` already exists in the wild, but `editas` mirrors doas naming better: *edit as [user]*.
@@ -91,6 +93,8 @@ make install DESTDIR=/tmp/pkg  # staged install (no host post-install folded)
 
 `make install` installs files only; it does not run the test suite (run `make` first). On a live install as root with empty `DESTDIR`, the Makefile tail-invokes `post-install` (broker user + staging `chown`). Otherwise run `make post-install` (or the shipped `post-install.sh`) after unpack / from `%post`, then merge `doas-snippet.conf` into `/etc/doas.conf`. See [packaging/README.md](packaging/README.md).
 
+To build a shim without edit-mode support, use `make EDIT_MODE=0` and `make EDIT_MODE=0 install`. This omits `sudoedit`/`editas`, edit-mode code, and edit-broker artifacts; `sudo -e` still parses but exits with a feature-not-built error.
+
 ## Uninstall
 
 ```sh
@@ -112,7 +116,7 @@ make            # full test suite and shim build (run before privileged install)
 
 For per-test details and docker images, see [tests/README.md](tests/README.md).
 
-If the test suite cannot run in your environment, build with `make doasudo` and install files to match a normal `make install` layout (the shim expects `shim-utils.sh` and `edit-broker-client.sh` under `$(PREFIX)/libexec/doasudo/`, with the broker and contracts beside them). When using `DESTDIR` for a staged install, run `make` (or `make check-src`) on a host similar to the deployment target first. See [packaging/README.md](packaging/README.md).
+If the test suite cannot run in your environment, build with `make doasudo` and install files to match a normal `make install` layout (the shim expects `shim-utils.sh` under `$(PREFIX)/libexec/doasudo/`; with edit mode enabled, it also expects `edit-broker-client.sh`, the broker, and contracts beside it). When using `DESTDIR` for a staged install, run `make` (or `make check-src`) on a host similar to the deployment target first. See [packaging/README.md](packaging/README.md).
 
 ---
 

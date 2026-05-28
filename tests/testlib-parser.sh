@@ -50,7 +50,7 @@ EOF
 #
 # _repo, _tmp, _mockbin, _sys_path, _version, _utils_meta,
 # _eb_client_meta, _shim_utils_src, _bindir_std, _sep, _edit_dummy,
-# _editfile, _built, _shim_src, _shim, _record
+# _editfile, _built, _shim_src, _shim, _record, _parser_edit_mode
 
 # Parses CLI args ($1=doasudo.in path, optional --built flag), sources
 # testlib.sh dependencies, creates mock env, builds base _shim and
@@ -63,6 +63,12 @@ _parser_setup() {
 
   # shellcheck source=../utils/metadata-utils.sh disable=SC1091
   . "$_here/../utils/metadata-utils.sh"
+
+  _parser_edit_mode=${DOASUDO_TEST_EDIT_MODE:-1}
+  case "$_parser_edit_mode" in
+    0 | 1) ;;
+    *) printf 'error: DOASUDO_TEST_EDIT_MODE must be 0 or 1\n' >&2; exit 1 ;;
+  esac
 
   _built=
   case "${1:-}" in
@@ -78,12 +84,14 @@ _parser_setup() {
   esac
 
   # shellcheck disable=SC2046,SC2235 # subshell: cd must not leak from _parser_setup
-  [ -f "$_repo/lib/edit-broker-client.sh" ] \
-    || (cd "$_repo" && "${MAKE:-make}" $(_make_s) lib/edit-broker-client.sh) \
-    || {
-      printf 'error: run make lib/edit-broker-client.sh from %s\n' "$_repo" >&2
-      exit 1
-    }
+  if [ "$_parser_edit_mode" -eq 1 ]; then
+    [ -f "$_repo/lib/edit-broker-client.sh" ] \
+      || (cd "$_repo" && "${MAKE:-make}" $(_make_s) lib/edit-broker-client.sh) \
+      || {
+        printf 'error: run make lib/edit-broker-client.sh from %s\n' "$_repo" >&2
+        exit 1
+      }
+  fi
 
   _setup_mockbin
   trap '_chmod_rm_tmp' EXIT
@@ -170,10 +178,13 @@ EOF
     printf 'error: could not compute UTILS_METADATA for lib/shim-utils.sh\n' >&2
     exit 1
   }
-  _eb_client_meta=$(_compute_metadata "$_repo/lib/edit-broker-client.sh" 644 stat-ug) || {
-    printf 'error: could not compute metadata for lib/edit-broker-client.sh\n' >&2
-    exit 1
-  }
+  _eb_client_meta=
+  if [ "$_parser_edit_mode" -eq 1 ]; then
+    _eb_client_meta=$(_compute_metadata "$_repo/lib/edit-broker-client.sh" 644 stat-ug) || {
+      printf 'error: could not compute metadata for lib/edit-broker-client.sh\n' >&2
+      exit 1
+    }
+  fi
 
   _sep=$(printf '\001')
   _bindir_std="${_mockbin}:${_sys_path}"
@@ -219,10 +230,15 @@ _parser_build_shim() {
   _pbs_um="$3"
   _pbs_su="$4"
   shift 4
-  _build_test_shim "$_repo" "$_shim_src" "$_pbs_out" "$_pbs_bindir" "$_pbs_um" \
-    "$_version" "$_pbs_su" "${_repo}/lib/edit-broker-client.sh" "$_eb_client_meta" \
-    "${_mockbin}/edit-broker" "${_eb_broker_meta}" \
-    "$@" || return
+  if [ "$_parser_edit_mode" -eq 1 ]; then
+    _build_test_shim "$_repo" "$_shim_src" "$_pbs_out" "$_pbs_bindir" "$_pbs_um" \
+      "$_version" "$_pbs_su" "${_repo}/lib/edit-broker-client.sh" "$_eb_client_meta" \
+      "${_mockbin}/edit-broker" "${_eb_broker_meta}" \
+      "$@" || return
+  else
+    _build_disabled_test_shim "$_repo" "$_shim_src" "$_pbs_out" "$_pbs_bindir" "$_pbs_um" \
+      "$_version" "$_pbs_su" "$@" || return
+  fi
   chmod +x "$_pbs_out"
 }
 

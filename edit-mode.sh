@@ -385,7 +385,7 @@ _run_edit_mode() {
   _PAGER=$(_resolve_bin less optional)
   [ -n "$_PAGER" ] || _PAGER=$(_resolve_bin more optional)
 
-  # shellcheck disable=SC2086,SC2317
+  # shellcheck disable=SC2086,SC2317,SC2329
   _diff() { "$_DIFF" $_DIFF_COLOR_FLAG -u -- "$1" "$2" 2>/dev/null; }
 
   # Temp files hold privileged content; enforce a strict umask.

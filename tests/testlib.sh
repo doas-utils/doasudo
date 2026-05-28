@@ -65,6 +65,27 @@ _build_test_shim() {
     "$@"
 }
 
+# Builds a shim with edit-mode payload and broker vars removed.
+_build_disabled_test_shim() {
+  _r=$1;   shift
+  _in=$1;  shift
+  _out=$1; shift
+  _bd=$1;  shift
+  _um=$1;  shift
+  _ver=$1; shift
+  _su=$1;  shift
+  "$_r/tests/build-test-shim.sh" \
+    --input "$_in" \
+    --output "$_out" \
+    --bindir "$_bd" \
+    --utils-metadata "$_um" \
+    --version "$_ver" \
+    --shim-utils "$_su" \
+    --no-edit-mode \
+    --drop-setuid-guard \
+    "$@"
+}
+
 # Initializes the mock environment and sets globals (_tmp, _mockbin,
 # _tmp_parent). Captures _tmp_parent to isolate the cleanup path, ensuring trap
 # handlers do not wipe the host's actual $TMPDIR if the test mutates it.
