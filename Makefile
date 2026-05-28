@@ -50,6 +50,24 @@ SBINDIR ?= $(PREFIX)/sbin
 
 VERSION := $(shell cat VERSION)
 
+# ---- Install command defaults ------------------------------------------------------------
+DESTDIR ?=
+INSTALL ?= install
+
+# ---- Edit-mode switch --------------------------------------------------------------------
+EDIT_MODE ?= 1
+ifneq ($(EDIT_MODE),$(filter 1,$(EDIT_MODE)))
+$(error EDIT_MODE must be 1)
+endif
+
+# ---- Symlink behavior --------------------------------------------------------------------
+# ln -f for sudoedit/editas symlinks: make install OVERWRITE_SYMLINKS=1
+OVERWRITE_SYMLINKS ?=
+ifneq ($(OVERWRITE_SYMLINKS),$(filter 1,$(OVERWRITE_SYMLINKS)))
+$(error OVERWRITE_SYMLINKS must be empty or 1)
+endif
+_LN_FLAGS := $(if $(OVERWRITE_SYMLINKS),-f,)
+
 # ---- Shim and broker paths ---------------------------------------------------------------
 # Shim runtime PATH (ignores the caller's PATH). Includes sbin (doas may live
 # there). Override for non-standard layouts (NixOS, pkgsrc, etc.).
@@ -57,9 +75,13 @@ SHIM_PATH ?= $(BINDIR):$(SBINDIR):/usr/bin:/usr/sbin:/bin:/sbin
 # Installed helpers; broker sources shim-utils.sh too.
 SHIM_LIBEXEC_DIR ?= $(PREFIX)/libexec/doasudo
 SHIM_UTILS ?= $(SHIM_LIBEXEC_DIR)/shim-utils.sh
+
 EDIT_BROKER_CLIENT ?= $(SHIM_LIBEXEC_DIR)/edit-broker-client.sh
 EDIT_BROKER_PATH ?= $(SHIM_LIBEXEC_DIR)/edit-broker
 EDIT_BROKER_CONTRACTS_PATH ?= $(SHIM_LIBEXEC_DIR)/edit-broker-contracts.env
+
+EDIT_MODE_SRC := edit-mode.sh
+EDIT_BROKER_SRCS := lib/edit-broker-client.sh broker/edit-broker.sh
 
 # Broker staging (one mktemp file per request; not TMPDIR).
 EDIT_BROKER_STAGING_DIR ?= /var/lib/doasudo/editbroker
@@ -131,31 +153,47 @@ BROKER_CONFIG_DIR ?= $(DOAS_SNIPPET_DIR)/config
 # Baked digest for shipped vimrc only; additional files → Makefile override + @...@ bake + registry arm.
 override BROKER_CONFIG_VIMRC_METADATA = $(shell . "$(_metadata_utils)" && _compute_metadata "$(CURDIR)/config/vimrc" 644 2>/dev/null || true)
 
-# ---- Install command defaults ------------------------------------------------------------
-DESTDIR ?=
-INSTALL ?= install
-
-# ---- Symlink behavior --------------------------------------------------------------------
-# ln -f for sudoedit/editas symlinks: make install OVERWRITE_SYMLINKS=1
-OVERWRITE_SYMLINKS ?=
-ifneq ($(OVERWRITE_SYMLINKS),$(filter 1,$(OVERWRITE_SYMLINKS)))
-$(error OVERWRITE_SYMLINKS must be empty or 1)
-endif
-_LN_FLAGS := $(if $(OVERWRITE_SYMLINKS),-f,)
-
 # ---- Substitution helpers ----------------------------------------------------------------
+#
 # sed(1) delimiter: ASCII SOH (0x01). Unlikely in paths; '|' appears in paths and would break sed -e.
 _SEP := $(shell printf '\001')
-# $(1) = placeholder name (no @); $(2) = replacement. One -e per line when recipes echo.
+
 define _sed_entry
 -e "s$(_SEP)@$(1)@$(_SEP)$(2)$(_SEP)"
 endef
+
+define _sed_entry_edit_mode
+-e '/^# @EDIT_MODE_BLOCK@$$/{' \
+-e '  r edit-mode.sh' \
+-e '  d' \
+-e '}'
+endef
+
+define _sed_entry_broker_metadata
+-e '/^# @EDIT_BROKER_METADATA@$$/{' \
+-e "  r $$_vars_file" \
+-e '  d' \
+-e '}'
+endef
+
+define _write_broker_metadata
+_vars_file=$$(mktemp "$${TMPDIR:-/tmp}/doasudo-edit-broker-vars.XXXXXX") && \
+trap 'rm -f "$$_vars_file"' EXIT INT HUP TERM && \
+{ \
+  printf '%s\n' "_EDIT_BROKER_CLIENT='$(EDIT_BROKER_CLIENT)'"; \
+  printf '%s\n' "_EDIT_BROKER_CLIENT_METADATA='$(EDIT_BROKER_CLIENT_METADATA)'"; \
+  printf '%s\n' "_EDIT_BROKER_PATH='$(EDIT_BROKER_PATH)'"; \
+  printf '%s\n' "_EDIT_BROKER_METADATA='$(EDIT_BROKER_METADATA)'"; \
+} > "$$_vars_file"
+endef
+
 # $(1) = output path; $(2) = grep -E pattern for leftover @...@ placeholders.
 define _verify_no_unsubst
   @grep -qE '$(2)' "$(1)" \
     && { printf 'error: substitution failed in %s\n' "$(1)" >&2; rm -f "$(1)"; exit 1; } \
     || true
 endef
+
 # broker substitutions: pipe-separated tokens (no (...) in pattern; breaks $(call)).
 BROKER_SUBST_CHECK_ERE := @EDIT_BROKER_STAGING_DIR@|@ALLOWLIST_PATH@|@ALLOWLIST_PARSER@|@EDIT_BROKER_TTY@|@BINDIR@|@MAGIC@|@MAX_BROKER_BYTES@|@BROKER_CONFIG_DIR@|@BROKER_CONFIG_VIMRC_METADATA@|@SHIM_UTILS@|@UTILS_METADATA@
 
@@ -196,20 +234,12 @@ lib/edit-broker-client.sh: lib/edit-broker-client.sh.in Makefile $(EDIT_BROKER_C
 # edit-mode.sh trailing newline is load-bearing: sed `r` reads the file as-is, so
 # a missing final \n would concatenate its last line with the line of
 # doasudo.in following the marker. Fail loudly if absent.
-doasudo: doasudo.in VERSION Makefile lib/shim-utils.sh lib/edit-broker-client.sh broker/edit-broker.sh edit-mode.sh
-  @[ -z "$$(tail -c1 edit-mode.sh | tr -d '\n')" ] \
-    || { printf 'error: edit-mode.sh missing trailing newline\n' >&2; exit 1; }
+doasudo: doasudo.in VERSION Makefile lib/shim-utils.sh $(EDIT_BROKER_SRCS) $(EDIT_MODE_SRC)
+  $(_write_broker_metadata) && \
   sed \
-    -e '/^# @EDIT_MODE_BLOCK@$$/{' \
-    -e '  r edit-mode.sh' \
-    -e '  d' \
-    -e '}' \
+    $(_sed_entry_edit_mode) \
+    $(_sed_entry_broker_metadata) \
     $(call _sed_entry,BINDIR,$(SHIM_PATH)) \
-    -e '/^# @EDIT_BROKER_METADATA@$$/c\
-_EDIT_BROKER_CLIENT='\''$(EDIT_BROKER_CLIENT)'\''\
-_EDIT_BROKER_CLIENT_METADATA='\''$(EDIT_BROKER_CLIENT_METADATA)'\''\
-_EDIT_BROKER_PATH='\''$(EDIT_BROKER_PATH)'\''\
-_EDIT_BROKER_METADATA='\''$(EDIT_BROKER_METADATA)'\''' \
     $(call _sed_entry,UTILS_METADATA,$(UTILS_METADATA)) \
     $(call _sed_entry,VERSION,$(VERSION)) \
     $(call _sed_entry,SHIM_UTILS,$(SHIM_UTILS)) \
@@ -364,18 +394,24 @@ check-broker-e2e:
 # Order: shim core (flags/parser/edit-mode), broker-contracts + allowlist + vim-profile,
 # broker-integration (EDITBROKER matrix), broker test-driver, then stale-metadata
 # last (removes doasudo after repair check).
+CORE_TESTS = \
+  sh tests/parser_test.sh doasudo.in
+EDIT_TESTS = \
+  sh tests/doas-flags-parity_test.sh doasudo.in && \
+  sh tests/edit-mode-parser_test.sh doasudo.in && \
+  sh tests/edit-mode_test.sh doasudo.in
+BROKER_TESTS = \
+  sh broker/tests/broker-contracts_test.sh && \
+  sh broker/tests/allowlist-parse_test.sh && \
+  sh broker/tests/vim-profile_test.sh && \
+  sh broker/tests/broker-integration_test.sh doasudo.in && \
+  sh broker/tests/test-driver.sh
 .PHONY: check-src
 check-src: lib/shim-utils.sh lib/edit-broker-client.sh broker/edit-broker.sh
   @printf '\n'
-  sh tests/doas-flags-parity_test.sh doasudo.in
-  sh tests/parser_test.sh doasudo.in
-  sh tests/edit-mode-parser_test.sh doasudo.in
-  sh tests/edit-mode_test.sh doasudo.in
-  sh broker/tests/broker-contracts_test.sh
-  sh broker/tests/allowlist-parse_test.sh
-  sh broker/tests/vim-profile_test.sh
-  sh broker/tests/broker-integration_test.sh doasudo.in
-  sh broker/tests/test-driver.sh
+  $(CORE_TESTS)
+  $(EDIT_TESTS)
+  $(BROKER_TESTS)
   sh tests/stale-metadata_test.sh
 
 # check-src runs tests that rebuild lib/shim-utils.sh with a mock SHIM_PATH; release
