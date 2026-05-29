@@ -54,7 +54,8 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           set -eu
-          sudo port -N install doas gmake shellcheck socat
+          brew install shellcheck
+          sudo port -N install doas gmake socat
           sudo chmod 4755 /opt/local/bin/doas 2>/dev/null || true
           if [ -r /etc/pam.d/sudo ] && [ ! -e /etc/pam.d/doas ]; then
             sudo cp /etc/pam.d/sudo /etc/pam.d/doas
