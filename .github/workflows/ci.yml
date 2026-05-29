@@ -5,24 +5,9 @@ on:
   pull_request:
 
 jobs:
-  shellcheck:
-    name: ShellCheck
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@064fe7f3312418007dea2b49a19844a9ee378f49
-
-      - name: Install ShellCheck
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y shellcheck
-
-      - name: Run ShellCheck
-        run: make shellcheck
-
   native-check:
     name: Native ${{ matrix.make_bin }} EDIT_MODE=${{ matrix.edit_mode }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -60,7 +45,7 @@ jobs:
         run: |
           set -eu
           sudo apt-get update
-          sudo apt-get install -y doas socat
+          sudo apt-get install -y doas shellcheck socat
           printf '%s\n' 'permit nopass runner' | sudo tee /etc/doas.conf >/dev/null
           sudo chmod 600 /etc/doas.conf
 
@@ -88,21 +73,19 @@ jobs:
       matrix:
         include:
           - name: Alpine
-            dockerfile: tests/docker/Alpine.Dockerfile
             tag: doasudo-alpine
             make_bin: make
           - name: Chimera
-            dockerfile: tests/docker/Chimera.Dockerfile
             tag: doasudo-chimera
             make_bin: gmake
 
     steps:
       - uses: actions/checkout@064fe7f3312418007dea2b49a19844a9ee378f49
 
-      - name: Build image (RUN probes Makefile targets)
-        run: docker build -f ${{ matrix.dockerfile }} -t ${{ matrix.tag }} .
+      - name: Build image (Makefile's check target run at image build time)
+        run: docker build -f "tests/docker/${{ matrix.name }}.Dockerfile" -t ${{ matrix.tag }} .
 
-      - name: Smoke installed shim (--version)
+      - name: Show installed shim version
         run: docker run --rm ${{ matrix.tag }} sh -c 'PATH=/usr/local/bin:/usr/bin:/bin exec sudo -V'
 
       - name: Smoke broker doas rule (editbroker hop)
@@ -125,29 +108,7 @@ jobs:
 
           docker run --rm -u 0 -w /src ${{ matrix.tag }} sh -c "$scr"
 
-  docker-uninstall:
-    name: Docker ${{ matrix.name }} uninstall
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Alpine
-            dockerfile: tests/docker/Alpine.Dockerfile
-            tag: doasudo-alpine
-            make_bin: make
-          - name: Chimera
-            dockerfile: tests/docker/Chimera.Dockerfile
-            tag: doasudo-chimera
-            make_bin: gmake
-
-    steps:
-      - uses: actions/checkout@064fe7f3312418007dea2b49a19844a9ee378f49
-
-      - name: Build test image
-        run: docker build -f ${{ matrix.dockerfile }} -t ${{ matrix.tag }} .
-
-      - name: ${{ matrix.make_bin }} uninstall as root (ephemeral overlay)
+      - name: ${{ matrix.make_bin }} uninstall as root
         run: |
           docker run --rm -u 0 -w /src ${{ matrix.tag }} sh -c '
             set -e
