@@ -6,17 +6,18 @@ on:
 
 jobs:
   native-check:
-    name: Native ${{ matrix.make_bin }} EDIT_MODE=${{ matrix.edit_mode }} (${{ matrix.os }})
+    name: Native ${{ matrix.make }}${{ matrix.edit_mode == 0 && ', no edit mode' || '' }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, macos-latest]
         edit_mode: [0, 1]
         include:
           - os: ubuntu-latest
-            make_bin: make
+            make: make
           - os: macos-latest
-            make_bin: gmake
+            make: gmake
 
     steps:
       - uses: actions/checkout@064fe7f3312418007dea2b49a19844a9ee378f49
@@ -62,8 +63,8 @@ jobs:
           sudo chmod 600 /opt/local/etc/doas.conf
           sudo ln -sf /bin/dash /var/select/sh
 
-      - name: Run tests (${{ matrix.make_bin }} EDIT_MODE=${{ matrix.edit_mode }})
-        run: ${{ matrix.make_bin }} EDIT_MODE=${{ matrix.edit_mode }} check-all
+      - name: Run tests (${{ matrix.make }} EDIT_MODE=${{ matrix.edit_mode }})
+        run: ${{ matrix.make }} EDIT_MODE=${{ matrix.edit_mode }} check-all
 
   docker-test:
     name: Docker ${{ matrix.name }} (user check + doas install in image)
@@ -74,10 +75,10 @@ jobs:
         include:
           - name: Alpine
             tag: doasudo-alpine
-            make_bin: make
+            make: make
           - name: Chimera
             tag: doasudo-chimera
-            make_bin: gmake
+            make: gmake
 
     steps:
       - uses: actions/checkout@064fe7f3312418007dea2b49a19844a9ee378f49
@@ -103,16 +104,16 @@ jobs:
           scr="set -eu;"
           scr="$scr PATH=/usr/local/bin:/usr/bin:/bin;"
           scr="$scr OVERWRITE_SYMLINKS=1 BROKER_E2E_SKIP_BUILD=1 BROKER_E2E_APPEND_DOAS_CONF=1"
-          scr="$scr ${{ matrix.make_bin }} broker-e2e-setup"
-          scr="$scr && su -s /bin/sh user -c 'cd /src && exec ${{ matrix.make_bin }} check-broker-e2e'"
+          scr="$scr ${{ matrix.make }} broker-e2e-setup"
+          scr="$scr && su -s /bin/sh user -c 'cd /src && exec ${{ matrix.make }} check-broker-e2e'"
 
           docker run --rm -u 0 -w /src ${{ matrix.tag }} sh -c "$scr"
 
-      - name: ${{ matrix.make_bin }} uninstall as root
+      - name: ${{ matrix.make }} uninstall as root
         run: |
           docker run --rm -u 0 -w /src ${{ matrix.tag }} sh -c '
             set -e
-            ${{ matrix.make_bin }} uninstall &&
+            ${{ matrix.make }} uninstall &&
             test ! -e /usr/local/bin/sudo &&
             test ! -d /usr/local/libexec/doasudo
           '
