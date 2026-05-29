@@ -340,7 +340,7 @@ _assert_missing_tool() {
   mv "${_tmp}/$1.bak" "${_mockbin}/$1"
   _amt_lbl="_resolve_bin: missing $1 (minimal PATH)"
   _assert_exit "$_amt_lbl" 1 "$_rc"
-  _assert_stderr_contains "$_amt_lbl" "$1 not found in SHIM_PATH" "$_err"
+  _assert_string_contains "$_amt_lbl" "$1 not found in SHIM_PATH" "$_err"
 }
 
 # $1 label; $2 expected exit; rest -> argv for main shim.

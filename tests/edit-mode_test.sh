@@ -428,7 +428,7 @@ printf 'original\n' > "$_f"
 _ed_nl=$(printf '%s\nX' "${_mockbin}/editor_modify")
 _run_capture_streams env SUDO_EDITOR="$_ed_nl" "$_shim" -e "$_f"
 _assert_exit "editor newline in path: exits 1" 1 "$_rc"
-_assert_stderr_contains "editor newline in path: message" "newlines" "$_err"
+_assert_string_contains "editor newline in path: message" "newlines" "$_err"
 
 printf '\n── Happy path: file content written back ───────────────────────────────────────\n'
 
@@ -473,7 +473,7 @@ _f="${_tmp}/wb_skip.txt"
 printf 'original\n' > "$_f"
 _run_editor_mode "${_mockbin}/editor_noop" "$_f"
 _assert_exit "mtime skip:  exits 0" 0 "$_rc"
-_assert_stderr_contains "mtime skip:  unchanged notice" "unchanged" "$_err"
+_assert_string_contains "mtime skip:  unchanged notice" "unchanged" "$_err"
 _assert_file_content "mtime skip:  unchanged" "$_f" "original"
 
 printf '\n── New file: created and written ───────────────────────────────────────────────\n'
@@ -493,7 +493,7 @@ _f="${_tmp}/wb_new_skip.txt"
 # editor_noop leaves the staged file untouched, so the target is not created.
 _run_editor_mode "${_mockbin}/editor_noop" "$_f"
 _assert_exit "new file skip: exits 0" 0 "$_rc"
-_assert_stderr_contains "new file skip: unchanged notice" "unchanged" "$_err"
+_assert_string_contains "new file skip: unchanged notice" "unchanged" "$_err"
 if [ ! -e "$_f" ]; then _pass_t "new file skip: target absent"
 else _fail_t "new file skip: target absent" "unexpected file: $(ls -l "$_f" 2>/dev/null)"; fi
 
@@ -534,7 +534,7 @@ if [ "$(id -u)" -ne 0 ]; then
   _f="${_tmp}/wb_fail/target.txt"
   _run_editor_mode "${_mockbin}/editor_modify" "$_f"
   _assert_exit "wb-fail:     exits 1" 1 "$_rc"
-  _assert_stderr_contains "wb-fail:     warns" "failed to write back" "$_err"
+  _assert_string_contains "wb-fail:     warns" "failed to write back" "$_err"
   _assert_file_content "wb-fail:     target unchanged" "$_f" "original"
 else
   _skip_t "wb-fail: EUID 0 bypasses chmod 555 parent (cannot simulate)"
@@ -549,7 +549,7 @@ _f="${_tmp}/wb_empty_guard.txt"
 printf 'original\n' > "$_f"
 _without_tty _run_editor_mode "${_mockbin}/editor_empty" "$_f"
 _assert_exit "empty guard: exits 1" 1 "$_rc"
-_assert_stderr_contains "empty guard: message" "not writing empty file in non-interactive context" "$_err"
+_assert_string_contains "empty guard: message" "not writing empty file in non-interactive context" "$_err"
 _assert_file_content "empty guard: target unchanged" "$_f" "original"
 
 printf '\n── Diff-confirm: non-interactive die path ──────────────────────────────────────\n'
@@ -558,7 +558,7 @@ _f="${_tmp}/wb_diff_confirm_no_tty.txt"
 printf 'original\n' > "$_f"
 _without_tty _run_capture_streams env SUDO_SHIM_CONFIRM_DIFF=1 SUDO_EDITOR="${_mockbin}/editor_modify" "$_shim" -e "$_f"
 _assert_exit "diff-confirm: exits 1" 1 "$_rc"
-_assert_stderr_contains "diff-confirm: message" "diff confirmation enabled, but no interactive TTY is available" "$_err"
+_assert_string_contains "diff-confirm: message" "diff confirmation enabled, but no interactive TTY is available" "$_err"
 _assert_file_content "diff-confirm: target unchanged" "$_f" "original"
 
 printf '\n── Interactive decline: _writeback_confirm returns 1 ───────────────────────────\n'
@@ -592,7 +592,7 @@ _f="${_tmp}/wb_attack_swap_tmpfile.txt"
 printf 'original\n' > "$_f"
 _run_editor_attack swap_tmpfile "$_f"
 _assert_exit "swap inode: exits 1" 1 "$_rc"
-_assert_stderr_contains "swap inode: message" "tmpfile inode changed during editor session" "$_err"
+_assert_string_contains "swap inode: message" "tmpfile inode changed during editor session" "$_err"
 _assert_file_content "swap inode: target unchanged" "$_f" "original"
 
 printf '\n── Attack: tmpfile replaced with non-regular object ────────────────────────────\n'
@@ -623,7 +623,7 @@ _f="${_dir}/target.txt"
 printf 'original\n' > "$_f"
 _run_editor_attack chmod_dir "$_f" EDITOR_ATTACK_DIR="$_dir" EDITOR_ATTACK_DIR_MODE="0755"
 _assert_exit "dir chmod: exits 1" 1 "$_rc"
-_assert_stderr_contains "dir chmod: message" "directory permissions changed during editing" "$_err"
+_assert_string_contains "dir chmod: message" "directory permissions changed during editing" "$_err"
 _assert_file_content "dir chmod: target unchanged" "$_f" "original"
 
 printf '\n── Attack: replace directory inode during edit ─────────────────────────────────\n'
@@ -634,7 +634,7 @@ printf 'original\n' > "$_f"
 _before_dir_inode=$(_inode_of "$_dir")
 _run_editor_attack replace_dir "$_f" EDITOR_ATTACK_DIR="$_dir" EDITOR_ATTACK_TARGET_BASENAME="target.txt"
 _assert_exit "dir replace: exits 1" 1 "$_rc"
-_assert_stderr_contains "dir replace: message" "directory replaced during editing" "$_err"
+_assert_string_contains "dir replace: message" "directory replaced during editing" "$_err"
 _assert_file_content "dir replace: target unchanged" "$_f" "original"
 _after_dir_inode=$(_inode_of "$_dir")
 if [ "$_after_dir_inode" != "$_before_dir_inode" ]; then
@@ -648,7 +648,7 @@ _f="${_tmp}/wb_attack_symlink_target.txt"
 printf 'original\n' > "$_f"
 _run_editor_attack target_symlink "$_f" EDITOR_ATTACK_TARGET="$_f"
 _assert_exit "target symlink: exits 1" 1 "$_rc"
-_assert_stderr_contains "target symlink: message" "target became a symlink during editing" "$_err"
+_assert_string_contains "target symlink: message" "target became a symlink during editing" "$_err"
 if [ -h "$_f" ] && [ ! -s "$_f" ]; then
   _pass_t "target symlink: target now symlink to empty (/dev/null)"
 else
@@ -665,8 +665,8 @@ _run_capture_streams env \
   SUDO_EDITOR="${_mockbin}/editor_modify" \
   "$_shim" -e "$_f"
 _assert_exit "seal tmpdir fail: exits 1" 1 "$_rc"
-_assert_stderr_contains "seal tmpdir fail: message" "could not seal tmpdir after editor exit" "$_err"
-_assert_stderr_excludes "seal tmpdir fail: not tmpfile path" "could not seal tmpfile after editor exit" "$_err"
+_assert_string_contains "seal tmpdir fail: message" "could not seal tmpdir after editor exit" "$_err"
+_assert_string_excludes "seal tmpdir fail: not tmpfile path" "could not seal tmpfile after editor exit" "$_err"
 _assert_file_content "seal tmpdir fail: target unchanged" "$_f" "original"
 
 printf '\n── Attack: mode op fails inside sh -c (pre-mv) ─────────────────────────────────\n'
@@ -685,7 +685,7 @@ _run_capture_streams env \
   SUDO_EDITOR="${_mockbin}/editor_modify" \
   "$_shim" -e "$_f"
 _assert_exit "mode op fail: exits 1" 1 "$_rc"
-_assert_stderr_contains "mode op fail: message" "failed to write back" "$_err"
+_assert_string_contains "mode op fail: message" "failed to write back" "$_err"
 _assert_file_content "mode op fail: target unchanged" "$_f" "original"
 _assert_file_mode "mode op fail: target mode unchanged" "$_f" "$_orig_mode"
 if grep -qF "${_orig_uid_gid}	" "$_chown_log"; then
@@ -707,7 +707,7 @@ _run_capture_streams env \
   SUDO_EDITOR="${_mockbin}/editor_modify" \
   "$_shim" -e "$_f"
 _assert_exit "owner op fail: exits 1" 1 "$_rc"
-_assert_stderr_contains "owner op fail: message" "failed to write back" "$_err"
+_assert_string_contains "owner op fail: message" "failed to write back" "$_err"
 _assert_file_content "owner op fail: target unchanged" "$_f" "original"
 _assert_file_mode "owner op fail: target mode unchanged" "$_f" "$_orig_mode"
 if grep -qF "${_orig_uid_gid}	" "$_chown_log"; then
@@ -963,7 +963,7 @@ if [ "$_have_socat" -eq 1 ]; then
   if _socat_answer_writeback "efail" "editor fail interactive" "$_f" y; then
     _assert_exit "editor fail interactive: exits 0" 0 "$_rc"
     _assert_pty_prompt_once "editor fail interactive: prompt observed once"
-    _assert_stderr_contains "editor fail interactive: warns" "editor exited with status 1" "$_err"
+    _assert_string_contains "editor fail interactive: warns" "editor exited with status 1" "$_err"
     _assert_file_content "editor fail interactive: target unchanged" "$_f" "original"
   fi
   unset SUDO_EDITOR
@@ -978,7 +978,7 @@ _f="${_tmp}/wb_editor_fail.txt"
 printf 'original\n' > "$_f"
 _without_tty _run_editor_mode "${_mockbin}/editor_fail" "$_f"
 _assert_exit "editor fail: exits 1" 1 "$_rc"
-_assert_stderr_contains "editor fail: message" "editor exited with status 1" "$_err"
+_assert_string_contains "editor fail: message" "editor exited with status 1" "$_err"
 _assert_file_content "editor fail: target unchanged" "$_f" "original"
 
 printf '\n── Editor failure + -n: _writeback_confirm dies unconditionally ─\n'
@@ -988,7 +988,7 @@ _f="${_tmp}/wb_editor_fail_n.txt"
 printf 'original\n' > "$_f"
 _run_editor_mode -n "${_mockbin}/editor_fail" "$_f"
 _assert_exit "editor fail -n: exits 1" 1 "$_rc"
-_assert_stderr_contains "editor fail -n: message" "editor exited with status 1" "$_err"
+_assert_string_contains "editor fail -n: message" "editor exited with status 1" "$_err"
 _assert_file_content "editor fail -n: target unchanged" "$_f" "original"
 
 # ---- Summary -----------------------------------------------------------------------------

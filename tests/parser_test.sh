@@ -116,12 +116,12 @@ _assert_recorded_cmd_args  "-- cmd args"        "${_mockbin}/doas arg1"
 
 _run_parser_shim "$_shim" FOO=bar "${_mockbin}/doas"
 _assert_exit               "VAR=value: exits 0" 0   "$_rc"
-_assert_stderr_contains    "VAR=value: warned"  "not supported" "$_err"
+_assert_string_contains    "VAR=value: warned"  "not supported" "$_err"
 _assert_recorded_command   "VAR=value: cmd"     "${_mockbin}/doas"
 
 _run_parser_shim "$_shim" -- FOO=bar
 _assert_exit               "-- FOO=bar: exits 1"    1 "$_rc"
-_assert_stderr_contains    "-- FOO=bar: diagnostic" "variable assignment" "$_err"
+_assert_string_contains    "-- FOO=bar: diagnostic" "variable assignment" "$_err"
 
 printf '\n── Short bundles ───────────────────────────────────────────────────────────────\n'
 
@@ -172,7 +172,7 @@ case "$_cs" in *"echo"*) _pass_t "-s with cmd: -c string has command" ;;
 
 _run_parser_shim env SHELL=not/absolute "$_shim" -s
 _assert_exit               "-s invalid \$SHELL: exits 1"    1 "$_rc"
-_assert_stderr_contains    "-s invalid \$SHELL: diagnostic" "invalid shell in \$SHELL" "$_err"
+_assert_string_contains    "-s invalid \$SHELL: diagnostic" "invalid shell in \$SHELL" "$_err"
 
 printf '\n── Shell escaping in -i/-s ─────────────────────────────────────────────────────\n'
 
@@ -193,12 +193,12 @@ case "$_cs" in *'$HOME'*) _pass_t "-s: dollar unescaped (shell_mode)" ;;
 
 _run_parser_shim "$_shim" -s echo ''
 _assert_exit               "-s empty arg: exits 1"    1 "$_rc"
-_assert_stderr_contains    "-s empty arg: diagnostic" "empty string" "$_err"
+_assert_string_contains    "-s empty arg: diagnostic" "empty string" "$_err"
 
 _nl=$(printf '\n_'); _nl="${_nl%_}"
 _run_parser_shim "$_shim" -s echo "foo${_nl}bar"
 _assert_exit               "-s newline arg: exits 1"     1 "$_rc"
-_assert_stderr_contains    "-s newline arg: diagnostic"  "newline" "$_err"
+_assert_string_contains    "-s newline arg: diagnostic"  "newline" "$_err"
 
 printf '\n── -K / -k / -v ────────────────────────────────────────────────────────────────\n'
 
@@ -208,11 +208,11 @@ _assert_record_has         "-K: doas -L called" "-L"
 
 _run_parser_shim env DOAS_MOCK_FAIL_L=1 "$_shim" -K
 _assert_exit               "-K doas -L fails: exits 1" 1 "$_rc"
-_assert_stderr_contains    "-K doas -L fails: warning" "may not have been cleared" "$_err"
+_assert_string_contains    "-K doas -L fails: warning" "may not have been cleared" "$_err"
 
 _run_parser_shim "$_shim" -K "${_mockbin}/doas"
 _assert_exit               "-K with cmd: exits 1"    1 "$_rc"
-_assert_stderr_contains    "-K with cmd: diagnostic" "may not be combined" "$_err"
+_assert_string_contains    "-K with cmd: diagnostic" "may not be combined" "$_err"
 
 _run_parser_shim "$_shim" -K -n
 _assert_exit               "-K -n: exits 1" 1 "$_rc"
@@ -222,21 +222,21 @@ _run_parser_shim "$_shim" -K -k
 _assert_exit               "-K -k: exits 1" 1 "$_rc"
 _run_parser_shim "$_shim" -K -H
 _assert_exit               "-K -H: exits 1" 1 "$_rc"
-_assert_stderr_contains    "-K -H: diagnostic" "may not be combined" "$_err"
+_assert_string_contains    "-K -H: diagnostic" "may not be combined" "$_err"
 _assert_record_lacks       "-K -H: no doas -L" "-L"
 _run_parser_shim "$_shim" -K -E
 _assert_exit               "-K -E: exits 1" 1 "$_rc"
-_assert_stderr_contains    "-K -E: diagnostic" "may not be combined" "$_err"
+_assert_string_contains    "-K -E: diagnostic" "may not be combined" "$_err"
 _assert_record_lacks       "-K -E: no doas -L" "-L"
 _run_parser_shim "$_shim" -K -l
 _assert_exit               "-K -l: exits 1" 1 "$_rc"
-_assert_stderr_contains    "-K -l: diagnostic" "may not be combined" "$_err"
-_assert_stderr_excludes    "-K -l: no list notice" "listing is not supported" "$_err"
+_assert_string_contains    "-K -l: diagnostic" "may not be combined" "$_err"
+_assert_string_excludes    "-K -l: no list notice" "listing is not supported" "$_err"
 _assert_record_lacks       "-K -l: no doas -L" "-L"
 _run_parser_shim "$_shim" -l -K
 _assert_exit               "-l -K: exits 1" 1 "$_rc"
-_assert_stderr_contains    "-l -K: diagnostic" "may not be combined" "$_err"
-_assert_stderr_excludes    "-l -K: no list notice" "listing is not supported" "$_err"
+_assert_string_contains    "-l -K: diagnostic" "may not be combined" "$_err"
+_assert_string_excludes    "-l -K: no list notice" "listing is not supported" "$_err"
 _assert_record_lacks       "-l -K: no doas -L" "-L"
 
 _run_parser_shim "$_shim" -k
@@ -245,7 +245,7 @@ _assert_record_has         "-k alone: doas -L called" "-L"
 
 _run_parser_shim env DOAS_MOCK_FAIL_L=1 "$_shim" -k
 _assert_exit               "-k doas -L fails: exits 1" 1 "$_rc"
-_assert_stderr_contains    "-k doas -L fails: warning" "may not have been cleared" "$_err"
+_assert_string_contains    "-k doas -L fails: warning" "may not have been cleared" "$_err"
 
 _run_parser_shim "$_shim" -k "${_mockbin}/doas"
 _assert_exit               "-k with cmd: exits 0"  0 "$_rc"
@@ -259,7 +259,7 @@ _assert_record_has         "-k -i: -i dispatch fired (-l present)" "-l"
 
 _run_parser_shim "$_shim" -v
 _assert_exit               "-v: exits 1"    1 "$_rc"
-_assert_stderr_contains    "-v: diagnostic" "not supported" "$_err"
+_assert_string_contains    "-v: diagnostic" "not supported" "$_err"
 
 printf '\n── -l / --list listing notice ──────────────────────────────────────────────────\n'
 
@@ -269,32 +269,32 @@ _listing_hint='doas.conf'
 
 _run_parser_shim "$_shim" -l
 _assert_exit               "-l alone: exits 0" 0 "$_rc"
-_assert_stderr_contains    "-l alone: listing diagnostic" "$_listing_sub" "$_err"
-_assert_stderr_contains    "-l alone: doas.conf hint" "$_listing_hint" "$_err"
+_assert_string_contains    "-l alone: listing diagnostic" "$_listing_sub" "$_err"
+_assert_string_contains    "-l alone: doas.conf hint" "$_listing_hint" "$_err"
 
 _run_parser_shim "$_shim" --list
 _assert_exit               "--list alone: exits 0" 0 "$_rc"
-_assert_stderr_contains    "--list alone: listing diagnostic" "$_listing_sub" "$_err"
-_assert_stderr_contains    "--list alone: doas.conf hint" "$_listing_hint" "$_err"
+_assert_string_contains    "--list alone: listing diagnostic" "$_listing_sub" "$_err"
+_assert_string_contains    "--list alone: doas.conf hint" "$_listing_hint" "$_err"
 
 _run_parser_shim "$_shim" -l "${_mockbin}/doas"
 _assert_exit               "-l with cmd: exits 1" 1 "$_rc"
-_assert_stderr_contains    "-l with cmd: listing diagnostic" "$_listing_sub" "$_err"
+_assert_string_contains    "-l with cmd: listing diagnostic" "$_listing_sub" "$_err"
 
 _run_parser_shim "$_shim" --list "${_mockbin}/doas"
 _assert_exit               "--list with cmd: exits 1" 1 "$_rc"
-_assert_stderr_contains    "--list with cmd: listing diagnostic" "$_listing_sub" "$_err"
+_assert_string_contains    "--list with cmd: listing diagnostic" "$_listing_sub" "$_err"
 
 printf '\n── --host warning paths ────────────────────────────────────────────────────────\n'
 
 _run_parser_shim "$_shim" --host localhost "${_mockbin}/doas"
 _assert_exit               "--host localhost: exits 0" 0 "$_rc"
-_assert_stderr_contains    "--host localhost: warned"  "not supported" "$_err"
+_assert_string_contains    "--host localhost: warned"  "not supported" "$_err"
 _assert_recorded_command   "--host localhost: cmd runs" "${_mockbin}/doas"
 
 _run_parser_shim "$_shim" --host=localhost "${_mockbin}/doas"
 _assert_exit               "--host=localhost: exits 0" 0 "$_rc"
-_assert_stderr_contains    "--host=localhost: warned"  "not supported" "$_err"
+_assert_string_contains    "--host=localhost: warned"  "not supported" "$_err"
 _assert_recorded_command   "--host=localhost: cmd runs" "${_mockbin}/doas"
 
 printf '\n── getent fallback path ────────────────────────────────────────────────────────\n'
@@ -321,7 +321,7 @@ if [ -z "$_built" ]; then
     *)
       _run_capture_streams sh -c 'cd "$1" && "$2" "$3"' _ "$_relcwd" "$_shim_rel" "${_mockbin}/doas"
       _assert_exit               "_resolve_bin: doas relative PATH entry" 1 "$_rc"
-      _assert_stderr_contains    "_resolve_bin: doas relative PATH entry"   "doas not found in SHIM_PATH" "$_err"
+      _assert_string_contains    "_resolve_bin: doas relative PATH entry"   "doas not found in SHIM_PATH" "$_err"
       ;;
   esac
 else
@@ -339,7 +339,7 @@ for _opt in \
 do
   _run_parser_shim "$_shim" $_opt "${_mockbin}/doas"
   _assert_exit               "$_opt: exits 0"  0 "$_rc"
-  _assert_stderr_contains    "$_opt: warned"   "not supported" "$_err"
+  _assert_string_contains    "$_opt: warned"   "not supported" "$_err"
   _assert_recorded_command   "$_opt: cmd runs" "${_mockbin}/doas"
 done
 
@@ -353,7 +353,7 @@ for _opt in \
 do
   _run_parser_shim "$_shim" $_opt "${_mockbin}/doas"
   _assert_exit               "$_opt: exits 0"    0 "$_rc"
-  _assert_stderr_excludes    "$_opt: no warning" "warning" "$_err"
+  _assert_string_excludes    "$_opt: no warning" "warning" "$_err"
   _assert_recorded_command   "$_opt: cmd runs"   "${_mockbin}/doas"
 done
 
@@ -361,7 +361,7 @@ printf '\n── Post-parse mutual exclusion ───────────�
 
 _run_parser_shim "$_shim" -i -s "${_mockbin}/doas"
 _assert_exit               "-i -s: exits 1"  1 "$_rc"
-_assert_stderr_contains    "-i -s: diagnostic" "may not specify" "$_err"
+_assert_string_contains    "-i -s: diagnostic" "may not specify" "$_err"
 
 printf '\n── Fatal options ───────────────────────────────────────────────────────────────\n'
 
@@ -372,15 +372,15 @@ done
 
 _run_parser_shim "$_shim" -u '#1000' "${_mockbin}/doas"
 _assert_exit               "-u #UID: exits 1"    1 "$_rc"
-_assert_stderr_contains    "-u #UID: diagnostic" "not supported" "$_err"
+_assert_string_contains    "-u #UID: diagnostic" "not supported" "$_err"
 
 _run_parser_shim "$_shim" --frobnicate "${_mockbin}/doas"
 _assert_exit               "unknown long opt: exits 1" 1 "$_rc"
-_assert_stderr_contains    "unknown long opt"          "unknown option" "$_err"
+_assert_string_contains    "unknown long opt"          "unknown option" "$_err"
 
 _run_parser_shim "$_shim" -Z "${_mockbin}/doas"
 _assert_exit               "unknown short opt: exits 1" 1 "$_rc"
-_assert_stderr_contains    "unknown short opt"          "unknown option" "$_err"
+_assert_string_contains    "unknown short opt"          "unknown option" "$_err"
 
 printf '\n── Missing arguments for value-taking options ──────────────────────────────────\n'
 

@@ -30,7 +30,7 @@ _assert_disabled_edit() {
   shift
   _run_capture_streams "$_shim" "$@"
   _assert_exit "${_label}: exits 1" 1 "$_rc"
-  _assert_stderr_contains "${_label}: stub message" "$_disabled_msg" "$_err"
+  _assert_string_contains "${_label}: stub message" "$_disabled_msg" "$_err"
 }
 
 printf '\n-- Disabled edit-mode stubs ---------------------------------------------------\n'
@@ -48,19 +48,19 @@ _sudoedit="${_tmp}/sudoedit"
 ln -sf "$_shim" "$_sudoedit"
 _run_capture_streams "$_sudoedit" "$_target"
 _assert_exit "sudoedit symlink: exits 1" 1 "$_rc"
-_assert_stderr_contains "sudoedit symlink: stub message" "$_disabled_msg" "$_err"
+_assert_string_contains "sudoedit symlink: stub message" "$_disabled_msg" "$_err"
 
 printf '\n-- Disabled help/version/dispatch --------------------------------------------\n'
 
 _run_capture_streams "$_shim" -h
 _assert_exit "help: exits 0" 0 "$_rc"
-_assert_stderr_excludes "help: no -e/--edit synopsis" "-e, --edit" "$_out"
-_assert_stderr_excludes "help: no sudoedit reference" "sudoedit" "$_out"
-_assert_stderr_excludes "help: no editas reference" "editas" "$_out"
+_assert_string_excludes "help: no -e/--edit synopsis" "-e, --edit" "$_out"
+_assert_string_excludes "help: no sudoedit reference" "sudoedit" "$_out"
+_assert_string_excludes "help: no editas reference" "editas" "$_out"
 
 _run_capture_streams "$_shim" --version
 _assert_exit "version: exits 0" 0 "$_rc"
-_assert_stderr_contains "version: doasudo" "doasudo" "$_out"
+_assert_string_contains "version: doasudo" "doasudo" "$_out"
 
 _run_capture_streams "$_shim" "${_mockbin}/doas"
 _assert_exit "normal dispatch: exits 0" 0 "$_rc"

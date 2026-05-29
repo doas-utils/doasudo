@@ -163,14 +163,14 @@ _assert_exit() {
   else _fail_t "${1}: exit ${2}" "got exit ${3}; stderr: ${_err:-<empty>}"; fi
 }
 
-_assert_stderr_contains() {
+_assert_string_contains() {
   case "$3" in
     *"${2}"*) _pass_t "${1}: stderr contains '${2}'" ;;
     *)        _fail_t "${1}: stderr contains '${2}'" "got: ${3}" ;;
   esac
 }
 
-_assert_stderr_excludes() {
+_assert_string_excludes() {
   case "$3" in
     *"${2}"*) _fail_t "${1}: stderr excludes '${2}'" "got: ${3}" ;;
     *)        _pass_t "${1}: stderr excludes '${2}'" ;;

@@ -85,7 +85,7 @@ printf '\n── Root-invoked edit mode ─────────────�
 if [ -z "$_built" ]; then
   _run_parser_shim "$_shim" -e "$_edit_dummy"
   _assert_exit               "root -e: exits 1" 1 "$_rc"
-  _assert_stderr_contains    "root -e: diagnostic" "not supported when invoked by root" "$_err"
+  _assert_string_contains    "root -e: diagnostic" "not supported when invoked by root" "$_err"
 else
   _skip_t "root -e: source-only (requires re-baked root-id harness)"
 fi
@@ -140,7 +140,7 @@ chmod 555 "${_tmp}/er_symlink"
 if [ -z "$_built" ]; then
   _run_parser_shim "$_shim_edit_leaf" -e "${_tmp}/er_symlink/thelink"
   _assert_exit               "-e symlink target: exits 1" 1 "$_rc"
-  _assert_stderr_contains    "-e symlink target" "editing symbolic links is not permitted" "$_err"
+  _assert_string_contains    "-e symlink target" "editing symbolic links is not permitted" "$_err"
 else
   _skip_t "-e symlink target: source-only (requires re-baked leaf-symlink harness)"
 fi
@@ -149,7 +149,7 @@ fi
 if [ -z "$_built" ]; then
   _run_parser_shim "$_shim_edit" -e /dev/zero
   _assert_exit               "-e device file: exits 1" 1 "$_rc"
-  _assert_stderr_contains    "-e device file" "device special" "$_err"
+  _assert_string_contains    "-e device file" "device special" "$_err"
 else
   _skip_t "-e device file: $_skip_src_only_msg"
 fi
@@ -164,7 +164,7 @@ if [ -z "$_built" ] && [ "$(id -u)" -ne 0 ]; then
   echo x > "${_tmp}/er_writable/wfile"
   _run_parser_shim "$_shim_edit" -e "${_tmp}/er_writable/wfile"
   _assert_exit               "-e writable directory: exits 1" 1 "$_rc"
-  _assert_stderr_contains    "-e writable directory" "writable directory is not permitted" "$_err"
+  _assert_string_contains    "-e writable directory" "writable directory is not permitted" "$_err"
   mv "$_id_edit" "${_mockbin}/id"
 elif [ -n "$_built" ]; then
   _skip_t "-e writable directory: $_skip_src_only_msg"
@@ -196,26 +196,26 @@ _rc=0; _err=$(SUDO_EDITOR="${_mockbin}/editor" "${_tmp}/editas" /nonexistent 2>&
 _rc=0; _err=$(SUDO_EDITOR="${_mockbin}/editor" "${_tmp}/sudoedit" -i "$_edit_dummy" 2>&1) || _rc=$?
 [ "$_rc" -ne 0 ] && _pass_t "sudoedit -i: exits non-zero" \
   || _fail_t "sudoedit -i: exits non-zero" "got exit 0"
-_assert_stderr_contains    "sudoedit -i: diagnostic" "not valid in edit mode" "$_err"
+_assert_string_contains    "sudoedit -i: diagnostic" "not valid in edit mode" "$_err"
 
 printf '\n── Post-parse mutual exclusion (edit-mode arms) ────────────────────────────────\n'
 
 if [ -z "$_built" ]; then
   _run_parser_shim "$_shim_edit" -e -i "$_edit_dummy"
   _assert_exit               "-e -i: exits 1"  1 "$_rc"
-  _assert_stderr_contains    "-e -i: diagnostic" "not valid in edit mode" "$_err"
+  _assert_string_contains    "-e -i: diagnostic" "not valid in edit mode" "$_err"
 
   _run_parser_shim "$_shim_edit" -e -s "$_edit_dummy"
   _assert_exit               "-e -s: exits 1"  1 "$_rc"
-  _assert_stderr_contains    "-e -s: diagnostic" "not valid in edit mode" "$_err"
+  _assert_string_contains    "-e -s: diagnostic" "not valid in edit mode" "$_err"
 
   _run_parser_shim "$_shim_edit" -e -H "$_edit_dummy"
   _assert_exit               "-e -H: exits 1"  1 "$_rc"
-  _assert_stderr_contains    "-e -H: diagnostic" "not valid in edit mode" "$_err"
+  _assert_string_contains    "-e -H: diagnostic" "not valid in edit mode" "$_err"
 
   _run_parser_shim "$_shim_edit" -e FOO=bar "$_edit_dummy"
   _assert_exit               "-e VAR=value: exits 1"    1 "$_rc"
-  _assert_stderr_contains    "-e VAR=value: diagnostic" "environment variables" "$_err"
+  _assert_string_contains    "-e VAR=value: diagnostic" "environment variables" "$_err"
 else
   _skip_built_mutex_options
 fi

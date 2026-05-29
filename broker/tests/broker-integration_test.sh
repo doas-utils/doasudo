@@ -89,7 +89,7 @@ _assert_broker_fail_closed() {
   printf 'original\n' > "$_abfc_file"
   _run_broker_mode "$_abfc_mode" "$_abfc_file" "$_abfc_shim"
   _assert_exit "${_abfc_lbl}: exits 1" 1 "$_rc"
-  _assert_stderr_contains "${_abfc_lbl}: message" "$_abfc_needle" "$_err"
+  _assert_string_contains "${_abfc_lbl}: message" "$_abfc_needle" "$_err"
   _assert_file_content "${_abfc_lbl}: target unchanged" "$_abfc_file" "original"
 }
 
@@ -201,14 +201,14 @@ _f="${_tmp}/wb_broker_noop.txt"
 printf 'original\n' > "$_f"
 _run_broker_mode passthrough "$_f"
 _assert_exit "broker noop: exits 0" 0 "$_rc"
-_assert_stderr_contains "broker noop: unchanged notice" "unchanged" "$_err"
+_assert_string_contains "broker noop: unchanged notice" "unchanged" "$_err"
 _assert_file_content "broker noop: target unchanged" "$_f" "original"
 
 _f="${_tmp}/wb_broker_failclosed.txt"
 printf 'original\n' > "$_f"
 _run_broker_mode error "$_f"
 _assert_exit "broker fail-closed: exits 1" 1 "$_rc"
-_assert_stderr_contains "broker fail-closed: message" "broker path failed" "$_err"
+_assert_string_contains "broker fail-closed: message" "broker path failed" "$_err"
 _assert_file_content "broker fail-closed: target unchanged" "$_f" "original"
 
 _broker_bad_dir="${_tmp}/broker_insecure"
@@ -231,7 +231,7 @@ printf '\n# tamper after bake\n' >> "${_broker_bad_dir}/edit-broker"
 
 _run_broker_mode success "$_f" "$_shim_insecure"
 _assert_exit "broker metadata mismatch: exits 1" 1 "$_rc"
-_assert_stderr_contains "broker metadata mismatch: message" "broker binary metadata mismatch" "$_err"
+_assert_string_contains "broker metadata mismatch: message" "broker binary metadata mismatch" "$_err"
 _assert_file_content "broker metadata mismatch: target unchanged" "$_f" "original"
 
 _assert_broker_fail_closed "broker missing RESP_CODE" missing_resp_code "invalid broker response prefix"
@@ -252,7 +252,7 @@ printf 'original\n' > "$_f"
 _run_broker_mode timeout "$_f" "$_shim_to1"
 _assert_exit "broker timeout: exits 1" 1 "$_rc"
 if [ "$_broker_kill0_usable" -eq 1 ]; then
-  _assert_stderr_contains "broker timeout: message" "broker response timed out" "$_err"
+  _assert_string_contains "broker timeout: message" "broker response timed out" "$_err"
 else
   _skip_t "broker timeout: message (kill -0 unavailable in sandbox)"
 fi
